@@ -3,10 +3,14 @@
 ##
 # @package  build
 # The contents of the build script for Dr Grätz OS (for details refer to
-# @ref build.py)
+# @ref build.py). The following temporary directories are created, if required:
+# - logs: contains all log files, will be erased before every build
 #
 # @file
 # The build script for Dr Grätz OS.
+#
+# @dir src
+# Contains all source files.
 
 
 ##
@@ -126,6 +130,98 @@ def _enforce_dir(path: str) -> None:
    if path != "" and not isdir(path):
       _enforce_dir(dirname(path))
       mkdir(path)
+
+
+##
+# Invokes a command line (a list of arguments, where the argument indexed with
+# zero is the command).
+#
+# The output and the error output is redirected to the logger with log levels
+# DEBUG and ERROR respectively.
+def _invoke(command_line: list, working_dir: str=".") -> None:
+   from logging import debug, DEBUG, ERROR, getLogger
+   from os import environ
+   from subprocess import check_call
+   from threading import Thread
+   
+   
+   ##
+   # A thread, that logs all messages to stdout 
+   class __ProcessLogger(Thread):
+      def __init__(self, log_level: int):
+         assert(isinstance(log_level, int))
+         Thread.__init__(self)
+         from os import pipe
+         self.__in, self.__out = pipe()
+         self.__log_level = log_level
+         self.start()
+ 
+ 
+      def run(self) -> None:
+         from os import read
+         line = ""
+         last_char = 0
+         while True:
+            try:
+               data = read(self.__in, 1024)
+            except:
+               break
+            data = data.decode("utf-8")
+            for char in data:
+               line_break = False
+               if char == "\r":
+                  line_break = True
+               elif char == "\n":
+                  line_break = last_char != "\r"
+               else:
+                  line += char
+               last_char = char
+               if line_break:
+                  getLogger().log(self.__log_level, line)
+                  line = ""
+         if line != "":
+            getLogger().log(self.__log_level, line)
+      
+      
+      @property
+      def out(self):
+         return self.__out
+
+         
+      def close(self) -> None:
+         from os import close
+         if self.__out is not None:
+            close(self.__out)
+            self.__out = None
+         if self.__in is not None:
+            close(self.__in)
+            self.__in = None
+
+            
+      def __enter__(self):
+         return self
+      
+      
+      def __exit__(self, exc_type, exc_value, traceback) -> None:
+         self.close()
+   
+   
+   assert(isinstance(command_line, list))
+   for element in command_line:
+      assert(isinstance(element, str))
+   assert(isinstance(working_dir, str))
+   # stdin, stdout, stderr
+   environment = {
+      "PATH": environ["PATH"]
+   }
+   debug(command_line)
+   with __ProcessLogger(DEBUG) as out_logger:
+      with __ProcessLogger(ERROR) as err_logger:
+         check_call(command_line, \
+            cwd=working_dir, \
+            env=environment, \
+            stdout = out_logger.out, \
+            stderr = err_logger.out)
 
 
 ##
@@ -279,19 +375,28 @@ def __print_help() -> None:
 
 
 ##
+# Creates the doxygen documentation. Logs a warning, if doxygen is not
+# installed. The file "src/doxygen.config" is used as doxygen configuration.
+@_Target
+def __doc() -> None:
+   """Create the doxgen documentation."""
+   from logging import info, warning
+   info("creating documentation")
+   _erase("doc", ["doc"])
+   _enforce_dir("doc")
+   try:
+      _invoke(["doxygen", "src/doxygen.config"])
+   except FileNotFoundError as e:
+      warning("doxygen not installed - no documentation generated")
+
+
+##
 # Complete build. Includes:
-# - @ref __compile()
-# - @ref __link()
-# - @ref __test()
 # - @ref __doc()
-# - @ref __zip()
 @_Target
 def __all() -> None:
    """Update all contents."""
-   #__link()
-   #__test()
-   #__doc()
-   #__zip()
+   __doc()
 
 
 __init_logging()
