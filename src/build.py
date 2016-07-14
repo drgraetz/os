@@ -770,7 +770,7 @@ def __doc() -> None:
    """Create the doxgen documentation."""
    from logging import info, warning
    info("creating documentation")
-   _enforce_dir("doc", True)
+   _erase("doc", ["doc"])
    try:
       _invoke(["doxygen", "src/doxygen.config"])
    except FileNotFoundError as e:
@@ -830,8 +830,6 @@ def __compile() -> None:
 # The required binutils are downloaded to "tools/src" and installed to
 # "tools/bin".
 #
-# Includes:
-# - @ref __compile()
 @_Target
 def __link() -> None:
    """Compile & link all changed files."""
@@ -871,10 +869,7 @@ def __link() -> None:
 
 
 ##
-# Complete build. Includes:
-# - @ref __compile()
-# - @ref __link()
-# - @ref __doc()
+# Complete build.
 @_Target
 def __all() -> None:
    """Update all contents."""
@@ -893,11 +888,7 @@ def __clean() -> None:
 
 
 ##
-# Complete rebuild. Includes:
-# - @ref __clean()
-# - @ref __compile()
-# - @ref __link()
-# - @ref __doc()
+# Complete rebuild.
 @_Target
 def __rebuild() -> None:
    """Clear stale data and create all contents."""
