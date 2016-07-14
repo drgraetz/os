@@ -31,3 +31,6 @@
 # Artefact directories
 /logs/
 /doc/
+/bin/
+/obj/
+/tools/
