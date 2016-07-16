@@ -1,6 +1,6 @@
 #define MULTIBOOT_ID            0x1BADB002
 #define MULTIBOOT_FLAGS         3
-
+#define MULTIBOOT_ACKNOWLEDGE   0x2BADB002
 
 .section .phys
 /*
@@ -26,11 +26,15 @@
 .type _start, @function
 .globl _start
 _start:
+    // if not started by a multiboot compliant header, loop infinetly
+    cli
+    cmpl    $MULTIBOOT_ACKNOWLEDGE, %eax
+    jnz     _start.infinty
     // initialize stack
     movl    $_stack.end, %esp
-    // main
-    //call    kmain
-    // Loop infintely
+    // call kernel main
+    call    kmain
+    // loop infintely
 _start.infinty:
     cli
     hlt

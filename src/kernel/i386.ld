@@ -17,4 +17,11 @@ SECTIONS {
     .bss : ALIGN(4K) {
         *(.bss)
     }
+    .rodata : ALIGN(4K) {
+        *(.rodata*)
+        . = ALIGN(4);
+        __CTOR_LIST__ = .;
+        *(.ctors)
+        __CTOR_END__ = .;
+    }
 }

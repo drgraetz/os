@@ -345,8 +345,8 @@ class _Platform:
       if extension == ".cpp":
          command_line += ["--std=c++11"]
       includes = [
-         join("src", "include", self.name)
-         # join("src", "ext")
+         join("src", "include", self.name),
+         join("src", "ext", "include")
       ]
       for include in includes:
          command_line += ["-I", include]
@@ -514,10 +514,10 @@ def _enforce_dir(path: str, clear_contents: bool=False) -> None:
    from os.path import dirname, isdir
    assert(isinstance(path, str))
    assert(isinstance(clear_contents, bool))
+   if clear_contents:
+      _erase(path, [path])
    if path != "" and not isdir(path):
       _enforce_dir(dirname(path))
-      if clear_contents:
-         _erase(path)
       mkdir(path)
 
 
@@ -869,11 +869,32 @@ def __link() -> None:
 
 
 ##
+# Test the builds.
+@_Target
+def __test() -> None:
+   """Test the builds."""
+   from logging import info
+   from os import listdir
+   from os.path import join
+   __link()
+   qemu_dir = "/cygdrive/c/Program Files/qemu"
+   for platform_name in listdir("bin"):
+      info("Testing " + platform_name)
+      platform = _Platform.get_all()[platform_name]
+      command_line = [
+         join(qemu_dir, "qemu-system-" + platform.architecture.name),
+         "-kernel", join("bin", platform.name, "kernel"),
+         "-serial", "file:" + join("logs", "test-" + platform.name + ".log")
+      ]
+      _invoke(command_line)
+
+
+##
 # Complete build.
 @_Target
 def __all() -> None:
-   """Update all contents."""
-   __link()
+   """Update and test all contents."""
+   __test()
    __doc()
 
 
