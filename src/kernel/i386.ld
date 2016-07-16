@@ -9,19 +9,39 @@ VIRT_ADDR = 0xFFF00000;
 KERNEL_OFFSET = VIRT_ADDR - PHYS_ADDR;
 
 SECTIONS {
-    . = PHYS_ADDR;
-    .text : {
+    . = VIRT_ADDR;
+    /* code */
+    .text : AT(PHYS_ADDR) {
+        /* physically addressed code (i.e. boot.i386.S) */
         *(.phys)
+        /* virtually addressed code (all other code) */
         *(.text)
+        /* GCC exception handler */
+        *(.eh_frame)
     }
-    .bss : ALIGN(4K) {
+    /* uninitialized data, e.g. stack, uninitialized variables */
+    .bss ALIGN(4K) : AT(ADDR(.bss) - KERNEL_OFFSET) {
         *(.bss)
     }
-    .rodata : ALIGN(4K) {
+    /* initialized, writable data */
+    .data : AT(ADDR(.data) - KERNEL_OFFSET) {
+        *(.data)
+    }
+    /* readonly data */
+    .rodata ALIGN(4K) : AT(ADDR(.rodata) - KERNEL_OFFSET) {
         *(.rodata*)
+        /* list of module initializers */
         . = ALIGN(4);
         __CTOR_LIST__ = .;
         *(.ctors)
         __CTOR_END__ = .;
+        /* list of module deinitializers */
+        __DTOR_LIST__ = .;
+        *(.dtors)
+        __DTOR_END__ = .;
+    }
+    /* discard all other segments */
+    /DISCARD/ : {
     }
 }
+PHYS_END = . - KERNEL_OFFSET;

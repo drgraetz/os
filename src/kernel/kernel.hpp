@@ -73,6 +73,10 @@ extern tty tty0;
  * boot.*.S, where * stands for the target platform. The entry function
  * performs the following operations:
  * - validate, that the boot process has been completed successfully
+ * - enable the memory management unit
+ * - make the kernel accessable in the highest MByte of virtual memory
+ * - set the access rights to the kernel memory such that the data and stack
+ *   are inaccessible from user code and the read-only data cannot be written
  * - invoke @ref kmain(void)
  * - if kmain returns (which is not expected to happen): hang the processor
  *   infinetly
