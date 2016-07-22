@@ -10,6 +10,11 @@
 
 int printf(const char*, ...);
 int putchar(int);
+#define assert(expression, __VA_ARGS__) {   \
+    if (!(expression)) {                    \
+        printf(__VA_ARGS__);                \
+        halt();                             \
+    } }
 
 /**
  * The definition of OS error codes. For a list of the error codes for the most
@@ -39,6 +44,10 @@ typedef enum {
     ENOTDIR = 20,   ///< Not a directory.
     EISDIR = 21,    ///< Is a directory.
     EINVAL = 22,    ///< Invalid argument.
+    ENFILE=23,      ///< File table overflow.
+    EMFILE=24,      ///< Too many open files.
+    ENOTTY=25,      ///< Not a typewriter.
+    ETXTBSY=26      ///< Text file busy.
 } errno_e;
 
 /**
@@ -82,6 +91,12 @@ extern tty tty0;
  *   infinetly
  */
 extern "C" void _start() __attribute__((noreturn));
+
+/**
+ * Halts the execution of code on the currently active CPU. This function is
+ * implemented in the file boot.*.S, where * stands for the target platform.
+ */
+extern "C" void halt() __attribute__((noreturn));
 
 /**
  * The kerneml's main function.

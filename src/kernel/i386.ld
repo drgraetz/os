@@ -4,12 +4,14 @@ ENTRY(_start)
 OUTPUT_ARCH(i386)
 
 PHYS_ADDR = 0x00100000;
-VIRT_ADDR = 0xFFF00000;
+VIRT_ADDR = 0xFFC00000;
 
 KERNEL_OFFSET = VIRT_ADDR - PHYS_ADDR;
 
 SECTIONS {
     . = VIRT_ADDR;
+    CODE = .;
+    PHYS = . - KERNEL_OFFSET;
     /* code */
     .text : AT(PHYS_ADDR) {
         /* physically addressed code (i.e. boot.i386.S) */
@@ -21,6 +23,7 @@ SECTIONS {
     }
     /* uninitialized data, e.g. stack, uninitialized variables */
     .bss ALIGN(4K) : AT(ADDR(.bss) - KERNEL_OFFSET) {
+    READWRITE = .;
         *(.bss)
     }
     /* initialized, writable data */
@@ -29,6 +32,7 @@ SECTIONS {
     }
     /* readonly data */
     .rodata ALIGN(4K) : AT(ADDR(.rodata) - KERNEL_OFFSET) {
+    READONLY = .;
         *(.rodata*)
         /* list of module initializers */
         . = ALIGN(4);
@@ -44,4 +48,4 @@ SECTIONS {
     /DISCARD/ : {
     }
 }
-PHYS_END = . - KERNEL_OFFSET;
+END = .;

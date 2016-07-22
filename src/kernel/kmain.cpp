@@ -28,7 +28,7 @@ int putchar(int value) {
 uint32_t __itoan(
     char* buffer,           /**< [out]  The buffer, to which the string is
                                         written */
-    uint32_t buffer_length, /**< [in]   The length of the buffer in bytes */
+    uint32_t bufferLength,  /**< [in]   The length of the buffer in bytes */
     uint32_t radix,         /**< [in]   The radix of the number system, in
                                         which the number is written */
     uint32_t value,         /**< [in]   The number to be written */
@@ -36,22 +36,22 @@ uint32_t __itoan(
                                         case letters are used for digits
                                         greater than 0 */
 ) {
-    if (buffer == 0 || buffer_length <= 0) {
+    if (buffer == 0 || bufferLength <= 0) {
         return 0;
     }
     int i = 0;
     char digit10 = upperCase ? 'A' : 'a';
-    if (buffer_length > 1 && radix > 0 && radix <= 36) {
-        for (i = 0; i < buffer_length - 1 && (value != 0 || i == 0); i++) {
-            unsigned int new_value = value / radix;
-            char digit = (char)(value - new_value * radix);
+    if (bufferLength > 1 && radix > 0 && radix <= 36) {
+        for (i = 0; i < bufferLength - 1 && (value != 0 || i == 0); i++) {
+            unsigned int newValue = value / radix;
+            char digit = (char)(value - newValue * radix);
             if (digit < 10) {
                 digit += '0';
             } else {
                 digit += digit10 - 10;
             }
             buffer[i] = digit;
-            value = new_value;
+            value = newValue;
         }
     }
     buffer[i] = '\0';
@@ -63,10 +63,14 @@ uint32_t __itoan(
     return i;
 }
 
+extern const char CODE;
+extern const char PHYS;
+
 int vprintf(const char* format, va_list arg) {
     if (format == nullptr) {
         return -1;
     }
+    format -= (&CODE - &PHYS);
     int result = 0;
     char leadingChar;
     int digits;
@@ -121,6 +125,9 @@ int vprintf(const char* format, va_list arg) {
             break;
         case 's':
             string = va_arg(arg, const char*);
+            if (string >= &CODE) {
+                string -= (&CODE - &PHYS);
+            }
             break;
         case 'p':
         case 'P':
@@ -187,4 +194,5 @@ void initModules() {
 void kmain() {
     initModules();
     printf("Hello from the kernel.\r\n");
+    halt();
 }
