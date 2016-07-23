@@ -346,6 +346,7 @@ class _Platform:
          command_line += ["--std=c++11"]
       includes = [
          join("src", "include", self.name),
+         join("src", "include"),
          join("src", "ext", "include")
       ]
       for include in includes:
@@ -879,12 +880,13 @@ def __test() -> None:
    __link()
    qemu_dir = "/cygdrive/c/Program Files/qemu"
    for platform_name in listdir("bin"):
-      info("Testing " + platform_name)
+      info("testing " + platform_name)
       platform = _Platform.get_all()[platform_name]
       command_line = [
          join(qemu_dir, "qemu-system-" + platform.architecture.name),
          "-kernel", join("bin", platform.name, "kernel"),
          "-serial", "file:" + join("logs", "test-" + platform.name + ".log"),
+         "-initrd", join("bin", platform.name, "launcher")
       ]
       _invoke(command_line)
 

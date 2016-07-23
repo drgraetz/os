@@ -8,7 +8,61 @@
  * The symbol definitions for the kernel.
  */
 
-extern "C" void exc0() __attribute__((noreturn));
+ 
+ /**
+  * The definition of an invalid pointer. Note, that nullptr is a valid
+  * pointer to the start of the physical memory.
+  */
+ #define INVALID_PTR        ((void*)(-1))
+ 
+/**
+ * The interface for streaming data. This corresponds to a posix file handle.
+ */
+class Stream {
+public:
+    /**
+     * The implementation of a posix lseek command. The whence parameter is
+     * set to SEEK_SET.
+     */
+    virtual off_t seek(off_t offset) = 0;
+    /**
+     * The implimentation of a posix write command.
+     *
+     * For the posix specification of the write function, refer to
+     * <http://pubs.opengroup.org/onlinepubs/009695399/functions/write.html>
+     */
+    virtual ssize_t write(const void* buf, size_t nbyte) = 0;
+    /**
+     * The implementation of a posix write command.
+     *
+     * For the posix specification of the write function, refer to
+     * <http://pubs.opengroup.org/onlinepubs/009695399/functions/read.html>
+     */
+    virtual ssize_t read(void* buf, size_t nbyte) = 0;
+};
+
+/**
+ * A stream writing to / reading from a memory area.
+ */
+class MemoryStream : public Stream {
+private:
+    char* start;
+    char* end;
+    char* current;
+public:
+    /**
+     * Creates a new instance working on a buffer.
+     */
+    MemoryStream(
+        void* buffer,   ///< The buffer to work on.
+        size_t size,    ///< The size of the buffer in bytes.
+        size_t pos      ///< The position in the buffer for the next read/write
+                        ///< operation.
+    );
+    virtual off_t seek(off_t offset);
+    virtual ssize_t write(const void* buf, size_t nbyte);
+    virtual ssize_t read(void* buf, size_t nbyte);
+};
 
 void* memset(void* ptr, int value, size_t byteCount);
 
@@ -51,8 +105,35 @@ typedef enum {
     ENFILE=23,      ///< File table overflow.
     EMFILE=24,      ///< Too many open files.
     ENOTTY=25,      ///< Not a typewriter.
-    ETXTBSY=26      ///< Text file busy.
+    ETXTBSY=26,     ///< Text file busy.
+    EFBIG=27,       ///< File too large.
+    ENOSPC=28,      ///< No space left on device.
+    ESPIPE=29,      ///< Illegal seek.
+    EROFS=30,       ///< Read only file system.
+    EMLINK=31,      ///< Too many links.
+    EPIPE=32,       ///< Broken pipe.
+    EDOM=33,        ///< Math arg out of domain of func.
+    ERANGE=34,      ///< Math result not representable.
+    ENOMSG=35,      ///< No message of desired type.
+    EEIDRM=36,      ///< Identifier removed.
+    ECHRNG=37,      ///< Channel number out of range.
+    EL2NSYNC=38,    ///< Level 2 not synchronized.
+    EL3HLT=39,      ///< Level 3 halted.
+    EL3RST=40,      ///< Level 3 reset.
+    ELNRNG=41,      ///< Link number out of range.
+    EUNATCH=42,     ///< Protocol driver not attached.
+    ENOCSI=43,      ///< No CSI structure available.
+    EL2HLT=44,      ///< Level 2 halted.
+    EDEADLK=45,     ///< Deadlock condition.
+    ENOTREADY=46,   ///< Device not ready.
+    EWRPROTECT=47,  ///< Write protected media.
+    EFORMAT=48,     ///< Unformatted media.
 } errno_e;
+
+/**
+ * Loads an ELF file from a stream.
+ */
+errno_e loadElf(Stream& stream);
 
 /**
  * The errorcode of the last OS operation.
@@ -63,17 +144,45 @@ extern errno_e errno;
  * The driver for the serial UART ports, available as tty devices to posix
  * compatible kernels.
  */
-class tty {
+class tty : public Stream {
 public:
     tty();
+    virtual off_t seek(off_t offset);
+    virtual ssize_t write(const void* buf, size_t nbyte);
+    virtual ssize_t read(void* buf, size_t nbyte);
+};
+
+/**
+ * A virtual address space.
+ */
+class AddressSpace {
+protected:
     /**
-     * The implimentation of a posix write command. Note, thatthe file handle
-     * is made obsolete by the this pointer.
-     *
-     * For the posix specification of the write function, refer to
-     * <http://pubs.opengroup.org/onlinepubs/009695399/functions/write.html>
+     * The kernel's address space.
      */
-    ssize_t write(const void* buf, size_t nbyte);
+    static AddressSpace kernel;
+public:
+    /**
+     * Sets up paging. The following actions are performed:
+     * - The pointers to the paging tables in the @ref AddressSpace::kernel
+     *   are adjusted to physical addresses.
+     * - The kernel is mapped 1:1 to its physical memory, so the physical
+     *   memory is marked as used.
+     * - The kernel is mapped to its location at the upper boundary of the
+     *   address range. The corresponding paging table is marked as global.
+     *   This is possible, as all code will access the kernel at this address.
+     *   Marking the memory area as global will speed up access to it, as the
+     *   paging tables are not updated on task switches.
+     * - The memory management unit is activated.
+     */
+    static void init();
+    /**
+     * Creates a new address space.
+     *
+     * @return The newly created address space or INVALID_PTR, if it could
+     * not be created. In this case, errno holds an error code.
+     */
+    static AddressSpace* create();
 };
 
 /**

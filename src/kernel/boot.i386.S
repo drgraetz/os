@@ -35,8 +35,8 @@ _start:
     subl    $KERNEL_OFFSET, %esp
     // save pointer on multiboot_info structure for later
     pushl   %ebx
-    // call i386::PagingDirectory::init()
-    call    _ZN4i38615PagingDirectory4initEv
+    // call AddressSpace::init()
+    call    _ZN12AddressSpace4initEv
     // load the global descriptor table and initialize segment registers
     pushl   $_gdt
     pushw   $(_gdt.end - _gdt - 1)
@@ -72,9 +72,9 @@ _start.init_idt:
     pushw   $(_idt.end - _idt - 1)
     lidt    (%esp)
     addl    $6, %esp
-    // call i386::PagingDirectory::init(multiboot_info), the parameter has
+    // call i386::AddressSpaceImpl::init(multiboot_info), the parameter has
     // already been pushed onto the stack
-    call    _ZN4i38615PagingDirectory4initEPK14multiboot_info
+    call    _ZN4i38616AddressSpaceImpl4initEPK14multiboot_info
     // call kernel main
     call    kmain
     // loop infinetly
@@ -108,8 +108,8 @@ LastPageTable:
 
 .section .data
 .align 4096
-_ZN4i38621kernelPagingDirectoryE:
-.globl _ZN4i38621kernelPagingDirectoryE
+_ZN12AddressSpace6kernelE:
+.globl _ZN12AddressSpace6kernelE
     .int    FirstPageTable + 0xE03
     .skip(4088)
     .int    LastPageTable + 0xF07
@@ -235,6 +235,8 @@ _handleException:
     pushw   $0
     pushw   %gs
     pushal
+    movl    56(%esp), %eax
+    pushl   %eax
     call    handleException
     popal
     popw    %gs

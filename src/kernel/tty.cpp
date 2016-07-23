@@ -222,6 +222,19 @@ tty::tty() {
     writeByte(COM_BASE + 4, 0x0B);
 }
 
+off_t tty::seek(off_t pos) {
+    return EIO;
+}
+
+ssize_t tty::read(void* buf, size_t nbyte) {
+    if (buf == nullptr || nbyte > SSIZE_MAX) {
+        errno = EINVAL;
+        return -1;
+    }
+    errno = EPERM;
+    return -1;
+}
+
 ssize_t tty::write(const void* buf, size_t nbyte) {
     if (buf == nullptr || nbyte > SSIZE_MAX) {
         errno = EINVAL;
