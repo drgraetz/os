@@ -337,7 +337,7 @@ class _Platform:
       else:
          command_line += [
             "--target=" + self.target,
-            "-mtune=" + self.cpu
+            "-mtune=" + self.cpu,
          ]
          if self.float_abi is not None:
             command_line += ["-mfloat-abi=" + self.float_abi]
@@ -884,7 +884,7 @@ def __test() -> None:
       command_line = [
          join(qemu_dir, "qemu-system-" + platform.architecture.name),
          "-kernel", join("bin", platform.name, "kernel"),
-         "-serial", "file:" + join("logs", "test-" + platform.name + ".log")
+         "-serial", "file:" + join("logs", "test-" + platform.name + ".log"),
       ]
       _invoke(command_line)
 

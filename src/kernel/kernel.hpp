@@ -10,6 +10,8 @@
 
 extern "C" void exc0() __attribute__((noreturn));
 
+void* memset(void* ptr, int value, size_t byteCount);
+
 int printf(const char*, ...);
 int putchar(int);
 #define assert(expression, __VA_ARGS__) {   \

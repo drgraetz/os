@@ -33,9 +33,10 @@ _start:
     // initialize stack
     movl    $_stack.end, %esp
     subl    $KERNEL_OFFSET, %esp
-    // call i386::PagingDirectory::initMemMap(%ebx)
+    // save pointer on multiboot_info structure for later
     pushl   %ebx
-    call    _ZN4i38615PagingDirectory4initEP14multiboot_info
+    // call i386::PagingDirectory::init()
+    call    _ZN4i38615PagingDirectory4initEv
     // load the global descriptor table and initialize segment registers
     pushl   $_gdt
     pushw   $(_gdt.end - _gdt - 1)
@@ -71,6 +72,9 @@ _start.init_idt:
     pushw   $(_idt.end - _idt - 1)
     lidt    (%esp)
     addl    $6, %esp
+    // call i386::PagingDirectory::init(multiboot_info), the parameter has
+    // already been pushed onto the stack
+    call    _ZN4i38615PagingDirectory4initEPK14multiboot_info
     // call kernel main
     call    kmain
     // loop infinetly

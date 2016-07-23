@@ -3,8 +3,11 @@
 
 #define PAGESIZE        4096
 #define TRUNC(x)        ((uint32_t)(x) & ~(PAGESIZE - 1))
+#define ISUNUSED(entry) (((entry) & PA_USERMASK) == PA_UNUSED)
 #define ISFREE(entry)   (((entry) & PA_USERMASK) == PA_FREE)
 #define ATTR(entry)     (((uint32_t)entry) & (PAGESIZE - 1))
+#define PA_PAGETABLE    ((attr_e)(PA_KERNEL | PA_WRITABLE | PA_PRESENT))
+
 /**
  * The start of the kernel code in the physical address range.
  */
@@ -26,7 +29,22 @@ extern const char READONLY;
  */
 extern const char END;
 
+void* memset(void* ptr, int value, size_t byteCount) {
+    char* c = (char*)ptr;
+    for (; byteCount > 0; byteCount--) {
+        *c++ = value;
+    }
+    return ptr;
+}
+
 namespace i386 {
+
+class PagingDirectory;
+
+/**
+ * The paging directory for the kernel.
+ */
+extern PagingDirectory kernelPagingDirectory;
 
 /**
  * A paging directory for the virtual memory management unit. The page
@@ -81,9 +99,10 @@ private:
         PA_GLOBAL = 256,    ///< Entry is used globally, i.e. it is not
                             ///< updated, when a new table is loaded.
         PA_USERMASK = 0xE00,///< Bitmask for singling out user bits.
-        PA_FREE = 0x000,    ///< Page is free.
-        PA_USER = 0x200,    ///< Page contains user code.
-        PA_BOOT = 0x400,    ///< Page contains bootstrap code or BIOS data.
+        PA_UNUSED = 0x000,  ///< Page is unused.
+        PA_FREE = 0x200,    ///< Page holds free memory.
+        PA_USER = 0x400,    ///< Page contains user code.
+        PA_BOOT = 0x600,    ///< Page contains bootstrap code or BIOS data.
         PA_KERNEL = 0xE00,  ///< Page contains kernel code.
     } attr_e;
     /**
@@ -103,12 +122,31 @@ private:
      */
     pageTable_t data;
     /**
-     * Allocates a single page of memory.
+     * Allocates a single page of memory. Halts, if no free memory is
+     * available. Asserts, if invalid attributes are passed.
+     *
      * @return The physical address of the newly allocated memory page.
      */
-    static void* allocate() {
-        printf("**** FUNCTION NOT IMPLEMENTED ****\r\n");
-        printf("PageTable::allocate()\r\n");
+    static void* allocate(
+        attr_e attributes   ///< The attributes of the newly allocated memory
+                            ///< page. Must neither be PA_UNUSED nor PA_FREE
+                            ///< nor PA_GLOBAL.
+    ) {
+        assert((!ISUNUSED(attributes)) && (!ISFREE(attributes)) &&
+            ((attributes & PA_GLOBAL) == 0),
+            "PagingDirectory::allocate(): invalid attributes.");
+        const char* addr = nullptr;
+        do {
+            uint32_t entry = kernelPagingDirectory.getEntry(addr);
+            if (ISFREE(entry)) {
+                *kernelPagingDirectory.getTableEntry(addr) =
+                    (uint32_t)addr | attributes;
+                memset((void*)addr, 0, PAGESIZE);
+                return (void*)addr;
+            }
+            addr += PAGESIZE;
+        } while (addr != nullptr);
+        printf("PageTable::allocate(): out of memory.\r\n");
         halt();
     }
     
@@ -169,24 +207,22 @@ private:
         assert((uint32_t)physAddr + size > (uint32_t)physAddr ||
             (uint32_t)virtAddr + size > (uint32_t)virtAddr,
             "PagingDirectory::map(): address overflow.");
-        assert(!ISFREE(attribute),
-            "PagingDirectory::map(): cannot map free memory.");
+        assert(!ISUNUSED(attribute),
+            "PagingDirectory::map(): cannot map unused memory.");
         size += ATTR(physAddr);
         physAddr = (const void*)TRUNC(physAddr);
         virtAddr = (const void*)TRUNC(virtAddr);
         for (size += PAGESIZE; size > PAGESIZE; size -= PAGESIZE) {
             uint32_t* dirEntry = getDirEntry(virtAddr);
-            if (ISFREE(*dirEntry)) {
-                *dirEntry = (uint32_t)allocate() | attribute;
-            } else {
-                merge(dirEntry, attribute);
+            if (ISUNUSED(*dirEntry)) {
+                *dirEntry = (uint32_t)allocate(PA_PAGETABLE) | PA_PAGETABLE;
             }
             uint32_t* tableEntry = getTableEntry(virtAddr);
-            if (ISFREE(*tableEntry)) {
+            if (ISUNUSED(*tableEntry)) {
                 *tableEntry = (uint32_t)physAddr | attribute;
             } else {
                 assert(TRUNC(*tableEntry) == TRUNC(physAddr),
-                   "PagingDirectory::map():: cannot relocate memory.");
+                   "PagingDirectory::map(): cannot relocate memory.");
                 merge(tableEntry, attribute);
             }
             physAddr = (const void*)((uint32_t)physAddr + PAGESIZE);
@@ -216,7 +252,7 @@ private:
                                 ///< directory entry is saught.
     ) {
         uint32_t dirEntry = *getDirEntry(virtAddr);
-        assert(!ISFREE(dirEntry),
+        assert(!ISUNUSED(dirEntry),
             "PagingDirectory::getTableEntry(): no paging table associated.");
         return (uint32_t*)TRUNC(dirEntry) +
             (((uint32_t)virtAddr >> 12) & 1023);
@@ -232,7 +268,7 @@ private:
                                 ///< directory entry is saught.
     ) {
         uint32_t* dirEntry = getDirEntry(virtAddr);
-        if (ISFREE(*dirEntry)) {
+        if (ISUNUSED(*dirEntry)) {
             return 0;
         } else {
             return *getTableEntry(virtAddr);
@@ -267,7 +303,7 @@ private:
         const char* start = nullptr;
         do {
             uint32_t startEntry = getEntry(start);
-            if (!ISFREE(startEntry)) {
+            if (!ISUNUSED(startEntry)) {
                 const char* end = start;
                 uint32_t endEntry;
                 uint32_t startAttr = ATTR(startEntry);
@@ -290,16 +326,16 @@ private:
                 const char* userAttrs;
                 switch (startAttr & PA_USERMASK) {
                 case PA_BOOT:
-                    userAttrs = "Boot";
+                    userAttrs = "boot";
                     break;
                 case PA_USER:
-                    userAttrs = "User";
+                    userAttrs = "user";
                     break;
                 case PA_KERNEL:
-                    userAttrs = "Kernel";
+                    userAttrs = "kernel";
                     break;
                 default:
-                    userAttrs = "undefined";
+                    userAttrs = "free";
                 }
                 printf("%p...%p -> %08x %s %s\r\n", start, end - 1,
                     TRUNC(startEntry), attribs, userAttrs);
@@ -342,6 +378,50 @@ private:
         map(phys, virt, size,
             (attr_e)(PA_KERNEL | PA_GLOBAL | PA_PRESENT | attributes));
     }
+    /**
+     * Maps a memory area provided by the bootloader 1:1. The memory area is
+     * marked as being provided by the bootloader. It is readonly and present
+     * in memory.
+     */
+    void mapBootloaderData(
+        const void* address,    ///< The physical adress of the mapped memory.
+        size_t size             ///< The number of bytes to be mapped.
+    ) {
+        this->map(address, address, size, (attr_e)(PA_BOOT | PA_PRESENT));
+    }
+    /**
+     * Maps the entire memory description as it has been provided by the
+     * bootloader 1:1 into the kernel's address space.
+     */
+    void mapAll(
+        const multiboot_memory_map_t* descr,    ///< Memory info structure
+                                                ///< provided by the multiboot
+                                                ///< compliant bootloader.
+        uint32_t len                            ///< Size of the memory
+                                                ///< information descriptor.
+    ) {
+        const multiboot_memory_map_t* end =
+            (const multiboot_memory_map_t*)((const char*)descr + len);
+        while (descr < end) {
+            // cannot use 64 bit integers because of a bug in clang, which
+            // forces the creation of code for xmm registers (which are not)
+            // available on 80386
+            uint32_t addrHigh = *(((uint32_t*)&descr->addr) + 1);
+            if (descr->type == MULTIBOOT_MEMORY_AVAILABLE && addrHigh == 0) {
+                uint32_t addrLow = (uint32_t)descr->addr;
+                uint32_t lenHigh = *(((uint32_t*)&descr->len) + 1);
+                uint32_t len = (uint32_t)descr->len;
+                if (addrLow + len > (uint32_t)&CODE || lenHigh != 0) {
+                    len = (uint32_t)&CODE - addrLow;
+                }
+                const void* addr = (const void*)addrLow;
+                map(addr, addr, len,
+                    (attr_e)(PA_PRESENT | PA_FREE | PA_WRITABLE));
+            }
+            descr = (const multiboot_memory_map_t*)
+                ((const char*)descr + descr->size + 4);
+        }
+    }
 public:
     /**
      * Returns the physical address to which a virtual address is mapped.
@@ -356,13 +436,27 @@ public:
         return (void*)(TRUNC(*getTableEntry(virtAddr)) + ATTR(virtAddr));
     }
     /**
+     * Sets up paging. The following actions are performed:
+     * - The pointers to the paging tables in the @ref kernelPagingDirectory
+     *   are adjusted to physical addresses.
+     * - The kernel is mapped 1:1 to its physical memory, so the physical
+     *   memory is marked as used.
+     * - The kernel is mapped to its location at the upper boundary of the
+     *   address range. The corresponding paging table is marked as global.
+     *   This is possible, as all code will access the kernel at this address.
+     *   Marking the memory area as global will speed up access to it, as the
+     *   paging tables are not updated on task switches.
+     * - The memory management unit is activated.
+     */
+    static void init();
+    /**
      * Initializes the system memory. The information provided by the multiboot
      * loader is taken into account. This applies especially to the maximum
      * boundaries of the lower and upper memory, to memory holes and to special
      * memory areas, such as loaded modules, BIOS memory, video memory and the
      * like.
      */
-    static void init(multiboot_info_t* info);
+    static void init(const multiboot_info_t* info);
     /**
      * Loads this into the memory management unit.
      */
@@ -373,19 +467,14 @@ public:
     }
 };
 
-/**
- * The paging directory for the kernel.
- */
-extern PagingDirectory kernelPagingDirectory;
-
-void PagingDirectory::init(multiboot_info_t* info) {
+void PagingDirectory::init() {
     uint32_t delta = &CODE - &PHYS;
     PagingDirectory* dir = (PagingDirectory*)((char*)&kernelPagingDirectory -
         delta);
     // adjust the virtual adresses of the paging directory to physical
     // addresses
     for (int i = 0; i < 1024; i++) {
-        if (!ISFREE(dir->data[i])) {
+        if (!ISUNUSED(dir->data[i])) {
             dir->data[i] -= delta;
         }
     }
@@ -401,8 +490,58 @@ void PagingDirectory::init(multiboot_info_t* info) {
         "orl     $0x80010000, %%eax;"
         "movl    %%eax, %%cr0" : :
         "a"(delta));
-    if (info != nullptr) {
+}
+
+void PagingDirectory::init(const multiboot_info_t* info) {
+    kernelPagingDirectory.mapBootloaderData(info, sizeof(multiboot_info_t));
+    if (info->flags & MULTIBOOT_INFO_MEM_MAP) {
+        const multiboot_memory_map_t* addr =
+            (const multiboot_memory_map_t*)info->mmap_addr;
+        uint32_t len = info->mmap_length;
+        kernelPagingDirectory.mapBootloaderData(addr, len);
+        kernelPagingDirectory.mapAll(addr, len);
+    } else if (info->flags & MULTIBOOT_INFO_MEMORY) {
+        multiboot_memory_map_t descrs[] = {
+            { 20, 0, info->mem_lower * 1024, MULTIBOOT_MEMORY_AVAILABLE},
+            { 20, 0x100000, info->mem_upper * 1024, MULTIBOOT_MEMORY_AVAILABLE}
+        };
+        kernelPagingDirectory.mapAll(descrs, sizeof(descrs));
     }
+    if (info->flags & MULTIBOOT_INFO_BOOTDEV) {
+        printf("bootdevice = %04x.%04x\r\n",
+            info->boot_device >> 16, info->boot_device & 0xFFFF);
+    }
+    if (info->flags & MULTIBOOT_INFO_CMDLINE) {
+        kernelPagingDirectory.mapBootloaderData((const void*)info->cmdline, PAGESIZE);
+        printf("cmdline = %s\r\n", info->cmdline);
+    }
+    if (info->flags & MULTIBOOT_INFO_MODS) {
+        printf("modules = %08x * %u\r\n", info->mods_addr, info->mods_count);
+    }
+    // if (info->flags & MULTIBOOT_INFO_AOUT_SYMS) {
+        // printf("aout syms\r\n");
+    // }
+    // if (info->flags & MULTIBOOT_INFO_ELF_SHDR) {
+        // printf("elf shdr\r\n");
+    // }
+    // if (info->flags & MULTIBOOT_INFO_DRIVE_INFO) {
+        // printf("drive info\r\n");
+    // }
+    // if (info->flags & MULTIBOOT_INFO_CONFIG_TABLE) {
+        // printf("config table\r\n");
+    // }
+    // if (info->flags & MULTIBOOT_INFO_BOOT_LOADER_NAME) {
+        // dir->mapBootloaderData((const void*)info->boot_loader_name, PAGESIZE);
+        // printf("bootloader name = %s\r\n",
+            // (const char*)info->boot_loader_name);
+    // }
+    // if (info->flags & MULTIBOOT_INFO_APM_TABLE) {
+        // printf("apm table\r\n");
+    // }
+    // if (info->flags & MULTIBOOT_INFO_VIDEO_INFO) {
+        // printf("video info\r\n");
+    // }
+    kernelPagingDirectory.dump();
 }
 
 }
