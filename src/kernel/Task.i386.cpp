@@ -310,17 +310,35 @@ private:
         } while (start != nullptr);
         printf("===================================================\r\n");
     }
+    /**
+     * Maps a memory kernel area. The memory is mapped 1:1 for kernel access
+     * and is mapped into the virtual memory area defined by @ref CODE. The
+     * 1:1 mapping is required, as the code is executed here before the
+     * execution is transfered to the virtual address, and marking the memory
+     * protects it from being allocated by other threads.
+     *
+     * The virtually mapped memory is mapped as globally available. It will be
+     * mapped by all threads to the same memory area to be accessible from all
+     * threads. Marking it as globally available leads into increased access
+     * speed, as the corresponding mapping entries don't need to be updated
+     * on task switches.
+     */
     void mapKernel(
-        const void* address,
-        const void* nextSegment,
+        const void* address,        ///< The start address of the memory area,
+                                    ///< which will be mapped.
+        const void* nextSegment,    ///< The first byte of the following
+                                    ///< memory area, i.e. the first byte,
+                                    ///< which will not be mapped.
         attr_e attributes
     ) {
+        assert(address < nextSegment,
+            "PagingDirectory::mapKernel(): negative size of memory area.");
         const uint32_t delta = &CODE - &PHYS;
         const char* virt = (const char*)address;
         const char* phys = virt - delta;
         const size_t size = (const char*)nextSegment - virt;
         map(phys, phys, size,
-            (attr_e)(PA_KERNEL | PA_PRESENT | attributes));
+            (attr_e)((PA_KERNEL | PA_PRESENT | attributes) & ~PA_RING0));
         map(phys, virt, size,
             (attr_e)(PA_KERNEL | PA_GLOBAL | PA_PRESENT | attributes));
     }

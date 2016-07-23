@@ -49,6 +49,28 @@ _start.load_cs:
     movw    %ax, %fs
     movw    %ax, %gs
     movw    %ax, %ss
+    // adjust the interrupt descriptor table
+    movl    $_idt.end, %ecx
+    movl    $_idt, %eax
+    movl    %eax, %esi
+    movl    %eax, %edi
+    subl    %eax, %ecx
+    shrl    $3, %ecx
+    cld
+_start.init_idt:
+    lodsl
+    movl    %eax, %ebx
+    lodsl
+    xchgw   %bx, %ax
+    stosl
+    movl    %ebx, %eax
+    stosl
+    loop    _start.init_idt
+    // load the interrupt descriptor table
+    pushl   $_idt
+    pushw   $(_idt.end - _idt - 1)
+    lidt    (%esp)
+    addl    $6, %esp
     // call kernel main
     call    kmain
     // loop infinetly
@@ -86,9 +108,9 @@ _ZN4i38621kernelPagingDirectoryE:
 .globl _ZN4i38621kernelPagingDirectoryE
     .int    FirstPageTable + 0xE03
     .skip(4088)
-    .int    LastPageTable + 0xE07
+    .int    LastPageTable + 0xF07
 
-/**
+/*
  * The global descriptor table. The entries are structured as follows:
  *
  * Offset| Description          | Remarks
@@ -161,6 +183,121 @@ _gdt:
     .quad   0x00CFF2000000FFFF
     .quad   0
 _gdt.end:
-.size gdt, . - _gdt
+.size _gdt, . - _gdt
+/*
+ * The interrupt descriptor table. The table is corrected by the @ref _start
+ * function, so it can be interpreted by the CPU.
+ *
+ * Each entry is defined as follows:
+ *
+ * Bits  | Description
+ * -----:|-----------------------------------------------
+ * 0-31  | address of the interrupt handler
+ * 32-39 | unused (should be 0)
+ * 40-42 | gate type, refer to table below for details
+ * 43    | use 32 bit addresses
+ * 44    | storage segment (0 for interrupt gates)
+ * 45-46 | privilege level for caller
+ * 47    | present
+ * 48-63 | segment descriptor (8 for kernel code segment)
+ *
+ * The following gate taypes are defined:
+ *
+ * Value | Description
+ * -----:|-------------------------------------------
+ * 1     | available task state segment
+ * 2     | local descriptor table (16 bits only)
+ * 3     | busy task state segment
+ * 4     | call gate
+ * 5     | task gate
+ * 6     | interrupt gate
+ * 7     | trap gate
+ *
+ * An interrupt pushes the following values on the stack:
+ * - SS:ESP, if the privielege level changes
+ * - EFLAGS
+ * - CS:EIP
+ * - error code
+ */
+
+.section .text
+_handleException:
+    pushw   $0
+    pushw   %ds
+    pushw   $0
+    pushw   %es
+    pushw   $0
+    pushw   %fs
+    pushw   $0
+    pushw   %gs
+    pushal
+    call    handleException
+    popal
+    popw    %gs
+    addl    $2, %esp
+    popw    %fs
+    addl    $2, %esp
+    popw    %es
+    addl    $2, %esp
+    popw    %ds
+    addl    $10, %esp
+    iret
+
+.section .data
+.align(8)
+_idt:
+
+.macro exceptionHandler number, hasErrorCode
+.type _exception\number, @function
+.section .phys
+.globl _exception\number
+_exception\number:
+.ifeq \hasErrorCode
+    pushl   $0
+.endif
+    pushl   $\number
+    jmp     _handleException
+.size _exception\number, . - _exception\number
+.section .data
+    .int    _exception\number
+    .int    0x00088E00
+.endm
+
+exceptionHandler 0, 0       // Divide by 0
+exceptionHandler 1, 0       // Debugger Exception
+exceptionHandler 2, 0       // Nonmaskable Interrupt
+exceptionHandler 3, 0       // Breakpoint
+exceptionHandler 4, 0       // Overflow
+exceptionHandler 5, 0       // Bounds Check
+exceptionHandler 6, 0       // Invalid Opcode
+exceptionHandler 7, 0       // Coprocessor not Available
+exceptionHandler 8, 1       // Double Fault
+exceptionHandler 9, 0       // Coprocessor Segment Overrun
+exceptionHandler 10, 1      // Invalid Task State Segment
+exceptionHandler 11, 1      // Coprocessor Segment not Present
+exceptionHandler 12, 1      // Stack Exception
+exceptionHandler 13, 1      // General Protection Fault
+exceptionHandler 14, 1      // Page Fault
+exceptionHandler 15, 0      // Coprocessor Error
+exceptionHandler 16, 0      // Alignment Check
+exceptionHandler 17, 0      // Machine Check
+exceptionHandler 18, 0      // SIMD Exception
+exceptionHandler 19, 0
+exceptionHandler 20, 0
+exceptionHandler 21, 0
+exceptionHandler 22, 0
+exceptionHandler 23, 0
+exceptionHandler 24, 0
+exceptionHandler 25, 0
+exceptionHandler 26, 0
+exceptionHandler 27, 0
+exceptionHandler 28, 0
+exceptionHandler 29, 0
+exceptionHandler 30, 0
+exceptionHandler 31, 0
+
+.section .data
+_idt.end:
+.size _idt, . - _idt
 
 .end

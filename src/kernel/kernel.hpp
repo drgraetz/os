@@ -8,6 +8,8 @@
  * The symbol definitions for the kernel.
  */
 
+extern "C" void exc0() __attribute__((noreturn));
+
 int printf(const char*, ...);
 int putchar(int);
 #define assert(expression, __VA_ARGS__) {   \
