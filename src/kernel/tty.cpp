@@ -1,5 +1,7 @@
 #include "kernel.hpp"
 
+#ifdef VERBOSE
+
 /**
  * The driver for the serial interfaces (COM* on Windows, tty* on Linux).
  *
@@ -256,3 +258,7 @@ ssize_t tty::write(const void* buf, size_t nbyte) {
     errno = ESUCCESS;
     return result;
 }
+
+tty tty::tty0;
+
+#endif

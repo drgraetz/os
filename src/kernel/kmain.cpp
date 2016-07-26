@@ -9,12 +9,13 @@
 
 void* operator new (unsigned int size, void* ptr) noexcept;
 
+#ifdef VERBOSE
 int putchar(int value) {
     if ((value < 32 || value > 127) && value != '\r' && value != '\n' &&
         value != '\t') {
         value = 127;
     }
-    tty0.write(&value, 1);
+    tty::tty0.write(&value, 1);
     return value;
 }
 
@@ -63,14 +64,17 @@ uint32_t __itoan(
     return i;
 }
 
-extern const char CODE;
-extern const char PHYS;
+char CODE;
+char PHYS;
 
 int vprintf(const char* format, va_list arg) {
     if (format == nullptr) {
         return -1;
     }
-    format -= (&CODE - &PHYS);
+    uint32_t delta = AddressSpace::isPagingEnabled() ? 0 : &CODE - &PHYS;
+    if (format >= &CODE) {
+        format -= delta;
+    }
     int result = 0;
     char leadingChar;
     int digits;
@@ -125,9 +129,6 @@ int vprintf(const char* format, va_list arg) {
             break;
         case 's':
             string = va_arg(arg, const char*);
-            if (string >= &CODE) {
-                string -= (&CODE - &PHYS);
-            }
             break;
         case 'p':
         case 'P':
@@ -140,6 +141,9 @@ int vprintf(const char* format, va_list arg) {
         default:
             putchar(c);
             continue;
+        }
+        if (string >= &CODE) {
+            string -= delta;
         }
         ssize_t len = 0;
         for (const char* tmp = string; *tmp != 0; tmp++) {
@@ -162,6 +166,8 @@ int printf(const char* format, ...) {
     va_end(arg);
     return result;
 }
+
+#endif
 
 errno_e errno = ESUCCESS;
 
@@ -194,5 +200,21 @@ void initModules() {
 void kmain() {
     initModules();
     printf("Hello from the kernel.\r\n");
+    void* ebp;
+    void* esp;
+    void* eip;
+    asm(
+        "call   .loadIp;"
+        ".loadIp:;"
+        "popl   %%eax;" :
+        "=a"(eip) :);
+    asm(
+        "movl   %%ebp, %%eax;" :
+        "=a"(ebp));
+    asm(
+        "movl   %%esp, %%eax;" :
+        "=a"(esp));
+    printf("ebp=%p esp=%p eip=%p\r\n", ebp, esp, eip);
+    printf("%u bytes of free memory\r\n", AddressSpace::free);
     halt();
 }

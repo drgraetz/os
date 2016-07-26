@@ -330,7 +330,8 @@ class _Platform:
          "-c", source_file,
          "-nostdinc",
          "-o", result,
-         "-fno-rtti"
+         "-fno-rtti",
+         "-DVERBOSE"
       ]
       if result.endswith(".bc"):
          command_line += ["-emit-llvm"]
