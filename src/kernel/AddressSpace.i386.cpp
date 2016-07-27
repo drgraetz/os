@@ -166,7 +166,7 @@ private:
      * be accessed at their physical addresses. This is required, as the
      * mapping tables have to be referred to by their physical addresses.
      */
-    static AddressSpaceImpl* identity;
+    static AddressSpaceImpl identity;
     /**
      * The physical address of @ref kernel mapping table.
      */
@@ -454,6 +454,10 @@ public:
     }
 
 };
+
+extern AddressSpaceImpl AddressSpaceImpl::identity;
+static void* AddressSpaceImpl::kernelPhys;
+static void* AddressSpaceImpl::identityPhys;
 
 /**
  * The global descriptor table. The entries are structured as follows:
