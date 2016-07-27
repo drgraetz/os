@@ -76,198 +76,6 @@ typedef enum {
  * address space itself.
  */
 class AddressSpaceImpl : public AddressSpace {
-// public:
-// private:
-    // /**
-     // * The contents of this. The topmost 10 bits of every pointer select an
-     // * entry in this. If the @ref PA_4MBYTE bit is set, the lower 22 bits
-     // * select an entry in the 4 MByte page pointed to by the directory entry.
-     // * Otherwise, the bits 12 ... 21 select an entry in the paging table
-     // * pointed to by the entry in the directory. In the latter case, the lowest
-     // * 12 bits define an offset in the 4 KByte page pointed to by the page
-     // * table.
-     // */
-    // pageTable_t data;
-    // /**
-     // * Maps a block of memory from a physical address to a virtual address. If
-     // * one of the memory pages, which will be mapped, overlaps with an already
-     // * mapped memory page, the attributes of the physical memory page are
-     // * merged as follows:
-     // * - the flags PA_PRESENT, PA_WRITABLE, PA_RING0 are ored
-     // * - the flags PA_WRITETHRU, PA_NOCACHE are anded
-     // * - the user flags are set to the greater of the two values
-     // *
-     // * @return 0 on success, -1 otherwise. In the later case, an errorcode is
-     // * provided in errno.
-     // */
-    // int map(
-        // const void* physAddr,   ///< The start address of the memory block,
-                                // ///< which should be mapped in physical memory.
-                                // ///< It does not need to be aligned with a
-                                // ///< memory page. In this case, the entire
-                                // ///< memory page is mapped.
-        // const void* virtAddr,   ///< The start address in virtual memory. It
-                                // ///< must have the same offset from the start
-                                // ///< of the memory page like the physical
-                                // ///< address.
-        // size_t size,            ///< The number of bytes, which will be mapped.
-                                // ///< Neither the physical nor the virtual
-                                // ///< address must overrun the 0 address.
-        // uint32_t attribute      ///< The attributes, with which the memory
-                                // ///< should be marked. The flags PA_ACCESSED,
-                                // ///< PA_DIRTY, and PA_4MBYTE should not be
-                                // ///< used. The user flags must be different
-                                // ///< from PA_FREE. See also
-                                // ///< @ref pageAttributes_e
-    // ) {
-        // assert(ATTR(virtAddr) == ATTR(physAddr),
-            // "PagingDirectory::map(): invalid page alignment.");
-        // assert((attribute & PA_4MBYTE) == 0,
-            // "PagingDirectory::map(): 4 MByte page are not supported.");
-        // assert((uint32_t)physAddr + size > (uint32_t)physAddr ||
-            // (uint32_t)virtAddr + size > (uint32_t)virtAddr,
-            // "PagingDirectory::map(): address overflow.");
-        // assert(!ISUNUSED(attribute),
-            // "PagingDirectory::map(): cannot map unused memory.");
-        // size += ATTR(physAddr);
-        // physAddr = (const void*)TRUNC(physAddr);
-        // virtAddr = (const void*)TRUNC(virtAddr);
-        // for (size += PAGESIZE; size > PAGESIZE; size -= PAGESIZE) {
-            // uint32_t* dirEntry = getDirEntry(virtAddr);
-            // if (ISUNUSED(*dirEntry)) {
-                // void* table = allocate(PA_PAGETABLE);
-                // if (table == INVALID_PTR) {
-                    // errno = ENOMEM;
-                    // return -1;
-                // }
-                // *dirEntry = (uint32_t)table | PA_PAGETABLE;
-            // }
-            // uint32_t* tableEntry = getTableEntry(virtAddr);
-            // if (ISUNUSED(*tableEntry)) {
-                // *tableEntry = (uint32_t)physAddr | attribute;
-            // } else {
-                // printf("map(%p, %p, %u, %u)\r\n", physAddr, virtAddr, size, attribute);
-                // printf("%u %u\r\n", *tableEntry, physAddr);
-                // assert(TRUNC(*tableEntry) == TRUNC(physAddr),
-                   // "PagingDirectory::map(): cannot relocate memory");
-                // uint32_t value = *tableEntry;
-                // if ((attribute & PA_USERMASK) > (value & PA_USERMASK)) {
-                    // value = (value & (~PA_USERMASK)) | (attribute & PA_USERMASK);
-                // }
-                // value |= (attribute & (PA_PRESENT | PA_WRITABLE | PA_RING0 |
-                    // PA_ACCESSED | PA_DIRTY));
-                // uint32_t andmask = PA_WRITETHRU | PA_NOCACHE;
-                // *tableEntry = (value & ~andmask) |
-                    // (value & attribute & andmask);
-            // }
-            // physAddr = (const void*)((uint32_t)physAddr + PAGESIZE);
-            // virtAddr = (const void*)((uint32_t)virtAddr + PAGESIZE);
-        // }
-        // errno = ESUCCESS;
-        // return 0;
-    // }
-    // /**
-     // * Gets a pointer to the entry in the paging directory for a virtual
-     // * address.
-     // *
-     // * @return a pointer to the entry in the paging directory.
-     // */
-    // uint32_t* getDirEntry(
-        // const void* virtAddr    ///< The virtual address, for which the paging
-                                // ///< directory entry is saught.
-    // ) {
-        // return data + ((uint32_t)virtAddr >> 22);
-    // }
-    // /**
-     // * Gets a pointer to the entry in the paging table for a virtual address.
-     // * Asserts, if no paging table exists.
-     // *
-     // * @return a pointer to the entry in the paging table.
-     // */
-    // uint32_t* getTableEntry(
-        // const void* virtAddr    ///< The virtual address, for which the paging
-                                // ///< directory entry is saught.
-    // ) {
-        // uint32_t dirEntry = *getDirEntry(virtAddr);
-        // assert(!ISUNUSED(dirEntry),
-            // "PagingDirectory::getTableEntry(): no paging table associated.");
-        // return (uint32_t*)TRUNC(dirEntry) +
-            // (((uint32_t)virtAddr >> 12) & 1023);
-    // }
-    // /**
-     // * Maps a memory area provided by the bootloader 1:1. The memory area is
-     // * marked as being provided by the bootloader. It is readonly and present
-     // * in memory.
-     // *
-     // * @return 0 on success, -1 otherwise. In the latter case, an error code is
-     // * provided in errno.
-     // */
-    // int mapBootloaderData(
-        // const void* address,    ///< The physical adress of the mapped memory.
-        // size_t size             ///< The number of bytes to be mapped.
-    // ) {
-        // return map(address, address, size, PA_BOOT | PA_PRESENT);
-    // }
-    // /**
-     // * Maps the entire memory description as it has been provided by the
-     // * bootloader 1:1 into the kernel's address space.
-     // *
-     // * @return 0 on success, -1 otherwise. In the latter case, an error code is
-     // * provided in errno.
-     // */
-    // int mapAll(
-        // const multiboot_memory_map_t* descr,    ///< Memory info structure
-                                                // ///< provided by the multiboot
-                                                // ///< compliant bootloader.
-        // uint32_t len                            ///< Size of the memory
-                                                // ///< information descriptor.
-    // ) {
-    // }
-// public:
-    // /**
-     // * Allocates a single page of memory. Halts, if no free memory is
-     // * available. Asserts, if invalid attributes are passed.
-     // *
-     // * @return The physical address of the newly allocated memory page, or
-     // * @ref INVALID_PTR
-     // */
-    // static void* allocate(
-        // uint32_t attributes ///< The attributes of the newly allocated memory
-                            // ///< page. Must neither be PA_UNUSED nor PA_FREE
-                            // ///< nor PA_GLOBAL. Will be ored with PA_PRESENT
-                            // ///< See also @ref pageAttributes_e
-    // ) {
-        // assert((!ISUNUSED(attributes)) && (!ISFREE(attributes)) &&
-            // ((attributes & PA_GLOBAL) == 0),
-            // "PagingDirectory::allocate(): invalid attributes.");
-        // attributes |= PA_PRESENT;
-        // const char* addr = nullptr;
-        // do {
-            // if (ISFREE(KERNEL->getEntry(addr))) {
-                // uint32_t* entry = KERNEL->getTableEntry(addr);
-                // *entry = (uint32_t)addr | attributes | PA_WRITABLE;
-                // memset((void*)addr, 0, PAGESIZE);
-                // if ((attributes & PA_WRITABLE) == 0) {
-                    // *entry = (uint32_t)addr | attributes;
-                // }
-                // return (void*)addr;
-            // }
-            // addr += PAGESIZE;
-        // } while (addr != nullptr);
-        // return INVALID_PTR;
-    // }
-    // /**
-     // * Initializes the system memory. The information provided by the multiboot
-     // * loader is taken into account. This applies especially to the maximum
-     // * boundaries of the lower and upper memory, to memory holes and to special
-     // * memory areas, such as loaded modules, BIOS memory, video memory and the
-     // * like. Furthermore, all modules passed by the bootloader are loaded as
-     // * ELF files.
-     // */
-    // static void init(const multiboot_info_t* info);
-    // //TSS::cpus[0].load();
-    // }
-// };
 
 //class TSS {
 /*private:
@@ -326,10 +134,57 @@ public:
 //TSS TSS::cpus[4];
 
 //}*/
+private:
+    /**
+     * Allocates a single page of memory.
+     *
+     * @return The physical address of the newly allocated memory page, or
+     * @ref INVALID_PTR if no free memory is available.
+     */
+    static void* allocate(
+    ) {
+        if (free == nullptr) {
+            return INVALID_PTR;
+        }
+        const void* old = getCurrentAddressSpace();
+        kernel.load();
+        void* result = (char*)free - PAGESIZE;
+        free = result;
+        pageTable_t* dir = (pageTable_t*)
+            kernel.getVirtualAddress((void*)TRUNC(
+                ((AddressSpaceImpl*)&kernel)->contents
+                [(uint32_t)result >> 22]));
+        if (dir != INVALID_PTR) {
+            dir->data[((uint32_t)result >> 12) & 1023] = 0;
+        }
+        setCurrentAddressSpace(old);
+        return result;
+    }
+    
+    /**
+     * The identity mapping table. It maps all paging tables 1:1, so they can
+     * be accessed at their physical addresses. This is required, as the
+     * mapping tables have to be referred to by their physical addresses.
+     */
+    static AddressSpaceImpl* identity;
+    /**
+     * The physical address of @ref kernel mapping table.
+     */
+    static void* kernelPhys;
+    /**
+     * The physical address of @ref identity.
+     */
+    static void* identityPhys;
 
 public:
     /**
-     * The contents of the paging dirctory.
+     * The contents of this. The topmost 10 bits of every pointer select an
+     * entry in this. If the @ref PA_4MBYTE bit is set, the lower 22 bits
+     * select an entry in the 4 MByte page pointed to by the directory entry.
+     * Otherwise, the bits 12 ... 21 select an entry in the paging table
+     * pointed to by the entry in the directory. In the latter case, the lowest
+     * 12 bits define an offset in the 4 KByte page pointed to by the page
+     * table.
      */
     pageTable_t contents;
     /**
@@ -350,15 +205,13 @@ public:
         uint32_t* dirp = ((uint32_t*)this) + ((uint32_t)virt >> 22);
         uint32_t dir = *dirp;
         if (ISUNUSED(dir)) {
-            //void* table = allocate(PA_PAGETABLE);
-            printf("failed to allocate paging table");
-            halt();
-            // if (table == INVALID_PTR) {
-                // errno = ENOMEM;
-                // return -1;
-            // }
-            // dir = (uint32_t)table | PA_PAGETABLE;
-            // *dirp = dir;
+            void* table = allocate();
+            if (table == INVALID_PTR) {
+                errno = ENOMEM;
+                return false;
+            }
+            dir = (uint32_t)table | PA_WRITABLE | PA_PRESENT;
+            *dirp = dir;
         }
         uint32_t* tablep = (uint32_t*)getVirtualAddress((void*)TRUNC(dir)) +
             (((uint32_t)virt >> 12) & 1023);
