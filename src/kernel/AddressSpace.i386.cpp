@@ -11,6 +11,7 @@
 #define TRUNC(x)        ((uint32_t)(x) & ~(PAGESIZE - 1))
 #define ATTR(entry)     (((uint32_t)entry) & (PAGESIZE - 1))
 #define ISUNUSED(x)     ((x) == 0)
+#define PHYSADDR(x)     ((void*)((char*)x - (uint32_t)(&CODE - &PHYS)))
 
 /**
  * The start of the kernel code in the physical address range.
@@ -34,6 +35,16 @@ extern const char READONLY;
 extern const char END;
 
 namespace i386 {
+
+/**
+ * Turns on paging and write protection in the virtual memory management unit.
+ */
+static inline void enablePaging() {
+    asm(
+        "movl   %%cr0, %%eax;"
+        "orl    $0x80010000, %%eax;"
+        "movl   %%eax, %%cr0;" : :);
+}
 
 /**
  * A paging table or paging directory. The upper 20 bits of every entry point
@@ -70,10 +81,7 @@ typedef enum {
 } pageAttributes_e;
 
 /**
- * The i386 specific implementation of an address space. Note, that the
- * addresses must be provided in the kernel's address space and that address
- * spaces are inaccessible from outside the kernel except for the kernel
- * address space itself.
+ * The i386 specific implementation of an address space.
  */
 class AddressSpaceImpl : public AddressSpace {
 
@@ -125,7 +133,7 @@ public:
         printf("%08x:%p", data.stack[0], data.stack[0].esp);
         printf("cpus[%u]", this - cpus);
     }*/
-    /**
+    /*
      * For each CPU a TSS is required.
      *//*
     //static TSS cpus[4];
@@ -134,48 +142,32 @@ public:
 //TSS TSS::cpus[4];
 
 //}*/
-private:
-    /**
-     * Allocates a single page of memory.
-     *
-     * @return The physical address of the newly allocated memory page, or
-     * @ref INVALID_PTR if no free memory is available.
-     */
-    static void* allocate(
-    ) {
-        if (free == nullptr) {
-            return INVALID_PTR;
-        }
-        const void* old = getCurrentAddressSpace();
-        kernel.load();
-        void* result = (char*)free - PAGESIZE;
-        free = result;
-        pageTable_t* dir = (pageTable_t*)
-            kernel.getVirtualAddress((void*)TRUNC(
-                ((AddressSpaceImpl*)&kernel)->contents
-                [(uint32_t)result >> 22]));
-        if (dir != INVALID_PTR) {
-            dir->data[((uint32_t)result >> 12) & 1023] = 0;
-        }
-        setCurrentAddressSpace(old);
-        return result;
-    }
-    
-    /**
-     * The identity mapping table. It maps all paging tables 1:1, so they can
-     * be accessed at their physical addresses. This is required, as the
-     * mapping tables have to be referred to by their physical addresses.
-     */
-    static AddressSpaceImpl identity;
-    /**
-     * The physical address of @ref kernel mapping table.
-     */
-    static void* kernelPhys;
-    /**
-     * The physical address of @ref identity.
-     */
-    static void* identityPhys;
-
+// private:
+    // /*
+     // * Allocates a single page of memory.
+     // *
+     // * @return The physical address of the newly allocated memory page, or
+     // * @ref INVALID_PTR if no free memory is available.
+     // */
+    // static void* allocate(
+    // ) {
+        // if (free == nullptr) {
+            // return INVALID_PTR;
+        // }
+        // const void* old = getCurrentAddressSpace();
+        // kernel.load();
+        // void* result = (char*)free - PAGESIZE;
+        // free = result;
+        // pageTable_t* dir = (pageTable_t*)
+            // kernel.getVirtualAddress((void*)TRUNC(
+                // ((AddressSpaceImpl*)&kernel)->contents
+                // [(uint32_t)result >> 22]));
+        // if (dir != INVALID_PTR) {
+            // dir->data[((uint32_t)result >> 12) & 1023] = 0;
+        // }
+        // setCurrentAddressSpace(old);
+        // return result;
+    // }
 public:
     /**
      * The contents of this. The topmost 10 bits of every pointer select an
@@ -195,35 +187,49 @@ public:
      * @return True on success. False on failure. In this case, errno will be
      * set.
      */
-    bool map(
-        const void* virt,   ///< The virtual address, which is mapped.
-        const void* phys,   ///< The physical address, to which is mapped.
+    bool mapPage(
+        const void* virt,   ///< The virtual address, which is mapped. Must be
+                            ///< aligned to a page boundary.
+        const void* phys,   ///< The physical address, to which is mapped. Must
+                            ///< be aligned to a page boundary.
         uint32_t attr       ///< The attributes, which will be applied to the
                             ///< mapped memory page. See @ref pageAttributes_e
                             ///< for details.
     ) {
-        uint32_t* dirp = ((uint32_t*)this) + ((uint32_t)virt >> 22);
-        uint32_t dir = *dirp;
-        if (ISUNUSED(dir)) {
-            void* table = allocate();
-            if (table == INVALID_PTR) {
-                errno = ENOMEM;
-                return false;
-            }
-            dir = (uint32_t)table | PA_WRITABLE | PA_PRESENT;
-            *dirp = dir;
-        }
-        uint32_t* tablep = (uint32_t*)getVirtualAddress((void*)TRUNC(dir)) +
-            (((uint32_t)virt >> 12) & 1023);
-        uint32_t table = *tablep;
-        uint32_t value = (uint32_t)phys | attr;
-        if (ISUNUSED(table)) {
-            *tablep = value;
-        } else if (((*tablep) & ~(PA_DIRTY | PA_ACCESSED)) != value) {
-            errno = EPERM;
+        if (TRUNC(phys) != (uint32_t)phys || TRUNC(virt) != (uint32_t)(virt) ||
+            attr != ATTR(attr)) {
+            errno = EINVAL;
             return false;
         }
-        return true;
+        pageTable_t& dir = *(pageTable_t*)getPhysicalAddress(this);
+        uint32_t& dirEntry = dir[(uint32_t)virt >> 22];
+        pageTable_t* table;
+        if (ISUNUSED(dirEntry)) {
+            printf("MUST ALLOCATE NEW TABLE\r\n");
+            halt();
+            // table = (pageTable_t*)
+                // ((uint32_t)allocate() | PA_WRITABLE | PA_PRESENT);
+        } else {
+            table = (pageTable_t*)TRUNC(dirEntry);
+        }
+        bool result;
+        if (table == INVALID_PTR) {
+            errno = ENOMEM;
+            result = false;
+        } else {
+            uint32_t& tableEntry = table->data[((uint32_t)virt >> 12) & 1023];
+            uint32_t value = (uint32_t)phys | attr;
+            if (ISUNUSED(tableEntry)) {
+                tableEntry = value;
+                result = true;
+            } else if ((tableEntry & ~(PA_DIRTY | PA_ACCESSED)) == value) {
+                result = true;
+            } else {
+                result = false;
+            }
+            errno = result ? ESUCCESS : EPERM;
+        }
+        return result;
     }
 
     #ifdef VERBOSE
@@ -237,72 +243,126 @@ public:
         const void* virt    ///< The virtual address, for which the entry is
                             ///< requested.
     ) {
-        const uint32_t dir = ((uint32_t*)this)[(uint32_t)virt >> 22];
+        uint32_t result;
+        const uint32_t dir = contents[(uint32_t)virt >> 22];
         if (ISUNUSED(dir)) {
-            return 0;
+            result = 0;
+        } else {
+            const pageTable_t* table = (pageTable_t*)TRUNC(dir);
+            result = table->data[((uint32_t)virt >> 12) & 1023];
         }
-        uint32_t* table = (uint32_t*)getVirtualAddress((void*)TRUNC(dir));
-        return table[((uint32_t)virt >> 12) & 1023];
+        return result;
     }
     #endif
 
+    // /*
+     // * Saves the currently used address space.
+     // *
+     // * @return the physical address of the currently active address space.
+     // */
+    // static const void* getCurrentAddressSpace() {
+        // const void* result;
+        // asm(
+            // "movl   %%cr3, %%eax;" :
+            // "=a"(result) :);
+        // return result;
+    // }
+    // /*
+     // * Sets the currently used address space.
+     // */
+    // static void setCurrentAddressSpace(
+        // const void* value   ///< The physical address of the new address space.
+    // ) {
+        // asm(
+            // "movl   %%eax, %%cr3;" : :
+            // "a"(value));
+    // }
+    
     /**
-     * Saves the currently used address space.
+     * Adjusts all addresses within in address space, which are mapped to the
+     * kernel data area, to the physical memory addresses.
      *
-     * @return the physical address of the currently active address space.
+     * @return the physical address of the address space, which has been
+     * adjusted.
      */
-    static const void* getCurrentAddressSpace() {
-        const void* result;
-        asm(
-            "movl   %%cr3, %%eax;" :
-            "=a"(result) :);
-        return result;
-    }
-    /**
-     * Sets the currently used address space.
-     */
-    static void setCurrentAddressSpace(
-        const void* value   ///< The physical address of the new address space.
+    static AddressSpaceImpl* adjustAddresses(
+        AddressSpace* virt  ///< The virtual address of the address space,
+                            ///< which will be adjusted.
     ) {
-        asm(
-            "movl   %%eax, %%cr3;" : :
-            "a"(value));
-    }
-
-    /**
-     * Switches on paging. Therefore the following steps are performed:
-     * - the paging directory is adjusted from virtual kernel addresses to
-     *   physical addresses
-     * - the kernel is mapped 1:1, so the code can still be executed after
-     *   paging is enabled
-     * - the kernel is mapped to its virtual address range
-     * - the kernel's paging directory is loaded
-     * - paging is enabled
-     */
-    static void enablePaging() {
-        uint32_t delta = &CODE - &PHYS;
-        // adjust the virtual adresses of the paging directory to physical
-        // addresses
-        AddressSpace* dir = (AddressSpace*)((char*)&kernel - delta);
-        uint32_t* dirEntry = (uint32_t*)dir;
-        for (int i = 0; i < 1024; i++, dirEntry++) {
-            if (!ISUNUSED(*dirEntry)) {
-                *dirEntry -= delta;
+        AddressSpaceImpl* phys = (AddressSpaceImpl*)PHYSADDR(virt);
+        for (int i = 0; i < 1024; i++) {
+            if (phys->contents[i] >= (uint32_t)&CODE) {
+                phys->contents[i] = (uint32_t)PHYSADDR(phys->contents[i]);
             }
         }
-        // map the kernel
+        return phys;
+    }
+    
+    /**
+     * Maps the kernel 1:1 and into its high memory address.
+     */
+    void mapKernel() {
         const char* end = (const char*)TRUNC(&END + PAGESIZE - 1);
-        dir->map(&CODE - delta, &CODE - delta, end - &CODE, true, false);
-        dir->map(&CODE, &CODE - delta, &READWRITE - &CODE, false, true);
-        dir->map(&READWRITE, &READWRITE - delta, &READONLY - &READWRITE, true,
-           false);
-        dir->map(&READONLY, &READONLY - delta, end - &READONLY, false, false);
-        dir->load();
-        // enable paging (and write protection)
+        map(PHYSADDR(&CODE), PHYSADDR(&CODE), end - &CODE, true, false);
+        map(&CODE, PHYSADDR(&CODE), &READWRITE - &CODE, false, true);
+        map(&READWRITE, PHYSADDR(&READWRITE), &READONLY - &READWRITE, true,
+            false);
+        map(&READONLY, PHYSADDR(&READONLY), end - &READONLY, false, false);
+    }
+    
+    /**
+     * Adjusts the stack so that all eip and ebp values pushed to it will point
+     * to the coresponding virtual kernel addresses.
+     */
+    static void adjustStack() {
+        void** ptr;
         asm(
-            "movl   %%cr0, %%eax;"
-            "orl    $0x80010000, %%eax;"
-            "movl   %%eax, %%cr0;" : :);
+            "movl   %%ebp, %%eax" :
+            "=a"(ptr) :);
+        void** end = (void**)(TRUNC(ptr) + PAGESIZE - 1);
+        uint32_t delta = &CODE - &PHYS;
+        while (ptr < end) {
+            void** next = (void**)*ptr;
+            void** ip = ptr + 1;
+            *ip = (void*)((uint32_t)*ip + delta);
+            *ptr = (void*)((uint32_t)next + delta);
+            ptr = next;
+        }
+        asm(
+            "addl   %%eax, %%esp;" : :
+            "a"(delta));
+    }
+    
+    /**
+     * Unmaps all memory pages except for those, which are required by the
+     * kernel. These are:
+     * - the high mapped kernel memory area
+     * - the paging directory entries
+     */
+    void unmapAll() {
+        // loop over all tables except for the last one, as it describes the
+        // high mapped kernel
+        for (size_t i = 0; i < 1023; i++) {
+            if (contents[i] == 0) {
+                continue;
+            }
+            pageTable_t& table = *(pageTable_t*)TRUNC(contents[i]);
+            for (size_t j = 0; j < 1024; j++) {
+                if (table[j] == 0) {
+                    continue;
+                }
+                // check, wether the address is referenced by the kernel's
+                // paging directory
+                uint32_t addr = (i << 22) + (j << 12);
+                bool found = addr == TRUNC(this);
+                for (size_t k = 0; k < 1024 && !found; k++) {
+                    found = TRUNC(contents[k]) == addr;
+                }
+                if (!found) {
+                    table[j] = 0;
+                }
+            }
+        }
     }
 
     /**
@@ -335,33 +395,35 @@ public:
         return result;
     }
 
-    /**
-     * Maps a free memory block to the next available address of free kernel
-     * memory. See @ref free for details.
-     */
-    static void mapFree(
-        const void* phys,   ///< The physical address to be mapped. Must be
-                            ///< aligned to a page boundary.
-        size_t size         ///< The size of the memory range to be mapped.
-                            ///< Must be a multiple of the page size.
-    ) {
-        const pageTable_t* kernelTable = (pageTable_t*)
-            kernel.getVirtualAddress(
-                (void*)TRUNC(((AddressSpaceImpl*)&kernel)->contents[1023]));
-        for (; size > 0 && free < &CODE; size -= PAGESIZE) {
-            bool found = false;
-            for (size_t i = 0; i < 1024 && !found; i++) {
-                uint32_t entry = kernelTable->data[i];
-                found = entry != 0 && TRUNC(entry) == (uint32_t)phys;
-            }
-            if (!found) {
-                if (kernel.map(free, phys, PAGESIZE, false, false)) {
-                    free = (void*)((char*)free + PAGESIZE);
-                }
-            }
-            phys = (void*)((char*)phys + PAGESIZE);
-        }
-    }
+    // /**
+     // * Maps a free memory block to the next available address of free kernel
+     // * memory. See @ref free for details.
+     // */
+    // static void mapFree(
+        // const void* phys,   ///< The physical address to be mapped. Must be
+                            // ///< aligned to a page boundary.
+        // size_t size         ///< The size of the memory range to be mapped.
+                            // ///< Must be a multiple of the page size.
+    // ) {
+        // printf("mapFree not implemented");
+        // halt();
+        // const pageTable_t* kernelTable = (pageTable_t*)
+            // kernel.getVirtualAddress(
+                // (void*)TRUNC(((AddressSpaceImpl*)&kernel)->contents[1023]));
+        // for (; size > 0 && free < &CODE; size -= PAGESIZE) {
+            // bool found = false;
+            // for (size_t i = 0; i < 1024 && !found; i++) {
+                // uint32_t entry = kernelTable->data[i];
+                // found = entry != 0 && TRUNC(entry) == (uint32_t)phys;
+            // }
+            // if (!found) {
+                // if (kernel.map(free, phys, PAGESIZE, false, false)) {
+                    // free = (void*)((char*)free + PAGESIZE);
+                // }
+            // }
+            // phys = (void*)((char*)phys + PAGESIZE);
+        // }
+    // }
 
     /**
      * Evaluates the information provided by the multiboot infostructure. The
@@ -417,8 +479,7 @@ public:
         // if (info->flags & MULTIBOOT_INFO_VIDEO_INFO) {
             // printf("video info\r\n");
         // }
-        /*
-        if (info->flags & MULTIBOOT_INFO_MEM_MAP) {
+        /*if (info->flags & MULTIBOOT_INFO_MEM_MAP) {
             const multiboot_memory_map_t* descr =
                 (const multiboot_memory_map_t*)info->mmap_addr;
             uint32_t len = info->mmap_length;
@@ -443,9 +504,9 @@ public:
                     ((const char*)descr + descr->size + 4);
             }
         } else*/ if (info->flags & MULTIBOOT_INFO_MEMORY) {
-            mapFree(nullptr, TRUNC(min(info->mem_lower, 639) * 1024));
-            mapFree((void*)0x100000, TRUNC(min(info->mem_upper * 1024,
-                (uint32_t)&CODE - 0x100000)));
+            // mapFree(nullptr, TRUNC(min(info->mem_lower, 639) * 1024));
+            // mapFree((void*)0x100000, TRUNC(min(info->mem_upper * 1024,
+                // (uint32_t)&CODE - 0x100000)));
         } else {
             printf("No memory information provided by bootloader.\r\n");
             halt();
@@ -454,10 +515,6 @@ public:
     }
 
 };
-
-extern AddressSpaceImpl AddressSpaceImpl::identity;
-static void* AddressSpaceImpl::kernelPhys;
-static void* AddressSpaceImpl::identityPhys;
 
 /**
  * The global descriptor table. The entries are structured as follows:
@@ -579,7 +636,7 @@ extern uint64_t IDT[32];
  * pointer, the stack pointer, and the base pointer will use the virtual kernel
  * addresses after a return from this function.
  */
-void loadGDT() {
+static inline void loadGDT() {
     // load the global descriptor table
     asm(
         "pushl  %%ebx;"
@@ -598,24 +655,6 @@ void loadGDT() {
         "movw   %%ax, %%gs;"
         "movw   %%ax, %%ss;"
         "addl   $6, %%esp;" : :);
-    // adjust the stack so that the ip, and bp use the new kernel address
-    // space after a return from this function
-    void** ptr;
-    asm(
-        "movl   %%ebp, %%eax" :
-        "=a"(ptr) :);
-    void** end = (void**)(TRUNC(ptr) + PAGESIZE - 1);
-    uint32_t delta = &CODE - &PHYS;
-    while (ptr < end) {
-        void** next = (void**)*ptr;
-        void** ip = ptr + 1;
-        *ip = (void*)((uint32_t)*ip + delta);
-        *ptr = (void*)((uint32_t)next + delta);
-        ptr = next;
-    }
-    asm(
-        "addl   %%eax, %%esp;" : :
-        "a"(delta));
 }
 
 /**
@@ -653,9 +692,7 @@ using namespace i386;
 
 #ifdef VERBOSE
 void AddressSpace::dump() {
-    const void* old = AddressSpaceImpl::getCurrentAddressSpace();
-    kernel.load();
-    printf("===========================================\r\n");
+   printf("===========================================\r\n");
     printf("PagingDirectory @ %p\r\n", this);
     const char* start = nullptr;
     do {
@@ -692,27 +729,23 @@ void AddressSpace::dump() {
         }
     } while (start != nullptr);
     printf("===========================================\r\n");
-    AddressSpaceImpl::setCurrentAddressSpace(old);
 }
 #endif
 
-AddressSpace* AddressSpace::create() {
-    halt();
-//    return (AddressSpace*)KERNEL->allocate(PA_USER | PA_WRITABLE);
-}
+// AddressSpace* AddressSpace::create() {
+    // printf("create not implemented");
+    // halt();
+// //    return (AddressSpace*)KERNEL->allocate(PA_USER | PA_WRITABLE);
+// }
 
 bool AddressSpace::map(const void* virt, const void* phys, size_t size,
     bool write, bool user) {
-    errno = ESUCCESS;
     if (ATTR(virt) != 0 || ATTR(phys) != 0 || ATTR(size) != 0 ||
         size == 0 || ((uint32_t)virt + size < (uint32_t)virt) ||
         ((uint32_t)phys + size < (uint32_t)phys)) {
         errno = EINVAL;
         return false;
     }
-    const void* old = AddressSpaceImpl::getCurrentAddressSpace();
-    kernel.load();
-    AddressSpaceImpl* dir = (AddressSpaceImpl*)kernel.getVirtualAddress(this);
     bool result = true;
     uint32_t attr = i386::PA_PRESENT;
     if (write) {
@@ -730,121 +763,76 @@ bool AddressSpace::map(const void* virt, const void* phys, size_t size,
         attr |= i386::PA_GLOBAL;
     }
     for (; size != 0; size -= PAGESIZE) {
-        result &= dir->map(virt, phys, attr);
+        result &= ((AddressSpaceImpl*)this)->mapPage(virt, phys, attr);
         virt = (char*)virt + PAGESIZE;
         phys = (char*)phys + PAGESIZE;
     }
-    AddressSpaceImpl::setCurrentAddressSpace(old);
     return result;
 }
 
-bool AddressSpace::unmap(const void* virt, size_t size) {
-    if ((uint32_t)virt + size < (uint32_t)virt || size == 0 ||
-        ATTR(size) != 0) {
-        errno = EINVAL;
-        return false;
-    }
-    errno = ESUCCESS;
-    AddressSpaceImpl* old = (AddressSpaceImpl*)
-        AddressSpaceImpl::getCurrentAddressSpace();
-    kernel.load();
-    pageTable_t& dir = *(pageTable_t*)getVirtualAddress(&old->contents);
-    for (; size != 0; size -= PAGESIZE) {
-        uint32_t dirEntry = dir[(uint32_t)virt >> 22];
-        if (!ISUNUSED(dirEntry)) {
-            pageTable_t& table = *(pageTable_t*)
-                getVirtualAddress((void*)TRUNC(dirEntry));
-            table[((uint32_t)virt >> 12) & 1023] = 0;
-        }
-        virt = (const void*)((char*)virt + PAGESIZE);
-    }
-    AddressSpaceImpl::setCurrentAddressSpace(old);
-    return true;
-}
+// bool AddressSpace::unmap(const void* virt, size_t size) {
+    // printf("unmap not implemented");
+    // halt();
+    // if ((uint32_t)virt + size < (uint32_t)virt || size == 0 ||
+        // ATTR(size) != 0) {
+        // errno = EINVAL;
+        // return false;
+    // }
+    // errno = ESUCCESS;
+    // AddressSpaceImpl* old = (AddressSpaceImpl*)
+        // AddressSpaceImpl::getCurrentAddressSpace();
+    // kernel.load();
+    // pageTable_t& dir = *(pageTable_t*)getVirtualAddress(&old->contents);
+    // for (; size != 0; size -= PAGESIZE) {
+        // uint32_t dirEntry = dir[(uint32_t)virt >> 22];
+        // if (!ISUNUSED(dirEntry)) {
+            // pageTable_t& table = *(pageTable_t*)
+                // getVirtualAddress((void*)TRUNC(dirEntry));
+            // table[((uint32_t)virt >> 12) & 1023] = 0;
+        // }
+        // virt = (const void*)((char*)virt + PAGESIZE);
+    // }
+    // AddressSpaceImpl::setCurrentAddressSpace(old);
+    // return true;
+// }
 
 void AddressSpace::init(void* data) {
-    AddressSpaceImpl::enablePaging();
+    AddressSpaceImpl* dir = AddressSpaceImpl::adjustAddresses(&kernel);
+    dir->mapKernel();
+    dir->load();
+    enablePaging();
     loadGDT();
+    AddressSpaceImpl::adjustStack();
     loadIDT();
-    AddressSpace::kernel.unmap(&PHYS, TRUNC(&END - &CODE + PAGESIZE - 1));
+    dir->unmapAll();
     AddressSpaceImpl::evaluateMultibootData((multiboot_info_t*)data);
 }
 
-void* AddressSpace::getVirtualAddress(const void* phys) {
-    if (!isPagingEnabled() || phys >= &CODE) {
-        return (void*)phys;
-    }
-    if (this == &kernel && (char*)phys >= &PHYS && 
-        ((char*)phys - &PHYS) < (&END - &CODE)) {
-        return (char*)phys + (uint32_t)(&CODE - &PHYS);
-    }
-    const void* old;
-    const pageTable_t* dir;
-    if (this != &AddressSpace::kernel) {
-        old = AddressSpaceImpl::getCurrentAddressSpace();
-        kernel.load();
-        dir = (const pageTable_t*)kernel.getVirtualAddress(old);
-    } else {
-        old = INVALID_PTR;
-        dir = (const pageTable_t*)this;
-    }
-    const uint32_t page = TRUNC(phys);
-    void* result = INVALID_PTR;
-    if (dir != INVALID_PTR) {
-        for (ssize_t i = 1023; result == INVALID_PTR && i >= 0; i--) {
-            uint32_t dirEntry = dir->data[i];
-            if (!ISUNUSED(dirEntry)) {
-                pageTable_t* table = (pageTable_t*)TRUNC(dirEntry);
-                if (this != &AddressSpace::kernel) {
-                    table = (pageTable_t*)kernel.getVirtualAddress(table);
-                } else {
-                    table = (pageTable_t*)((char*)table +
-                        uint32_t(&CODE - &PHYS));
-                }
-                if (table != INVALID_PTR) {
-                    for (ssize_t j = 1023; result == INVALID_PTR && j >= 0;
-                        j--) {
-                        uint32_t tableEntry = table->data[j];
-                        if (!ISUNUSED(tableEntry) &&
-                            TRUNC(tableEntry) == page) {
-                            result = (void*)
-                                ((i << 22) + (j << 12) + ATTR(phys));
-                        }
-                    }
-                }
-            }
-        }
-    }
-    if (this != &AddressSpace::kernel) {
-        AddressSpaceImpl::setCurrentAddressSpace(old);
-    }
-    return result;
-}
-
 void* AddressSpace::getPhysicalAddress(const void* virt) {
+    const uint32_t delta = (uint32_t)(&CODE - &PHYS);
     if (!isPagingEnabled()) {
         return (void*)virt;
     }
-    uint32_t dir = ((uint32_t*)this)[(uint32_t)virt >> 22];
+    if (virt >= &CODE) {
+        return (char*)virt - (uint32_t)(&CODE - &PHYS);
+    }
+    uint32_t dir = ((AddressSpaceImpl*)this)->contents[(uint32_t)virt >> 22];
     if (ISUNUSED(dir)) {
         return INVALID_PTR;
     }
-    if (this == &kernel) {
-        dir += &CODE - &PHYS;
+    pageTable_t& table = *(pageTable_t*)TRUNC(dir);
+    uint32_t result = table[((uint32_t)virt >> 12) & 1023];
+    if (ISUNUSED(result)) {
+        return INVALID_PTR;
     } else {
-        dir = (uint32_t)getVirtualAddress((void*)dir);
-        if (dir == (uint32_t)INVALID_PTR) {
-            return INVALID_PTR;
-        }
+        return (void*)result;
     }
-    uint32_t table = ((uint32_t*)TRUNC(dir))[((uint32_t)virt >> 12) & 1023];
-    return (void*)(TRUNC(table) + ATTR(virt));
 }
 
 void AddressSpace::load() {
     asm(
         "movl   %%eax, %%cr3;" : :
-        "a"(kernel.getPhysicalAddress(this)));
+        "a"(getPhysicalAddress(this)));
 }
 
 #ifdef VERBOSE

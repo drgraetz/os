@@ -108,6 +108,6 @@ errno_e loadElf(Stream& stream) {
             ph.type, ph.offset, ph.virtAddr, ph.physAddr, ph.fileSize,
             ph.memorySize, ph.flags, ph.alignment);
     }
-    AddressSpace* as = AddressSpace::create();
+    // AddressSpace* as = AddressSpace::create();
     return ESUCCESS;
 }

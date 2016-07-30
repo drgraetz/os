@@ -332,10 +332,12 @@ public:
                         ///< structure. On i386, the multiboot_info_t passed
                         ///< by the bootloader is passed.
     );
+    #ifdef VERBOSE
     /**
      * Determines, wether paging has alread be enabled or not.
      */
     static bool isPagingEnabled();
+    #endif
 };
 
 /**

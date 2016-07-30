@@ -65,9 +65,9 @@ _stack.end:
  * uppermost 4 MByte address range.
  */
 FirstPageTable:
-.skip 4096
+    .skip 4096
 LastPageTable:
-.skip 4096
+    .skip 4096
 
 .section .data
 .align 4096
