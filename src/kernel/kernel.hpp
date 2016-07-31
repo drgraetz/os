@@ -2,6 +2,7 @@
 #define __KERNEL_HPP
 
 #include <stdint.h>
+#include PLATFORM_HEADER
 
 /**
  * @file

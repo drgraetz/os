@@ -331,7 +331,9 @@ class _Platform:
          "-nostdinc",
          "-o", result,
          "-fno-rtti",
-         "-DVERBOSE"
+         "-DVERBOSE",
+         "-DPLATFORM=\"" + self.name + "\"",
+         "-DPLATFORM_HEADER=\"" + self.name + ".hpp\""
       ]
       if result.endswith(".bc"):
          command_line += ["-emit-llvm"]
