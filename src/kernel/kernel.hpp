@@ -224,14 +224,7 @@ public:
  * same location in all memory maps.
  */
 class AddressSpace {
-protected:
 public:
-    /**
-     * A pointer to the highest address of free memory in the kernel's address
-     * space. The free memory starts at 0 and may range up to the kernel's
-     * virtual address.
-     */
-    static const void* free;
     /**
      * Resolves a virtual address into a physical address.
      *
@@ -329,16 +322,11 @@ public:
     );
     /**
      * Sets up paging. The following actions are performed:
-     * - The pointers to the paging tables in the @ref AddressSpace::kernel
-     *   are adjusted to physical addresses.
-     * - The kernel is mapped 1:1 to its physical memory, so the physical
-     *   memory is marked as used.
      * - The kernel is mapped to its location at the upper boundary of the
-     *   address range. The corresponding paging table is marked as global.
-     *   This is possible, as all code will access the kernel at this address.
-     *   Marking the memory area as global will speed up access to it, as the
-     *   paging tables are not updated on task switches.
+     *   address range.
      * - The memory management unit is activated.
+     * - The available system memory is reported to be free by invoking
+     *   @ref MemoryManager::markAsFree(const void*)
      */
     static void init(
         void*   data    ///< Pointer to an architecture specific data
@@ -351,6 +339,36 @@ public:
      */
     static bool isPagingEnabled();
     #endif
+};
+
+/**
+ * The kernel's memory management functionality.
+ */
+class MemoryManager {
+public:
+    /**
+     * Marks a memory page as being free. This method should only be invoked
+     * during the initialization phase of the kernel, i.e. prior to a call of
+     * @ref kmain()
+     */
+    static void markAsFree(
+        const uint32_t phys ///< The index of the next free memory page. Using
+                            ///< indexing instead of actual addresses, the
+                            ///< address range of available memory pages is
+                            ///< significantly increased, which may come in
+                            ///< handy on some later 32 bit intel machines.
+    );
+    /**
+     * Returns the number of free memory pages.
+     */
+    static uint32_t getFreePagesCount();
+    /**
+     * Allocates a new page of memory.
+     *
+     * @return the index of the newly allocated memory page or -1, if no free
+     * memory is available.
+     */
+    static uint32_t allocate();
 };
 
 /**

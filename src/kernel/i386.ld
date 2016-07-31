@@ -29,6 +29,7 @@ SECTIONS {
     }
     /* initialized, writable data */
     .data : AT(ADDR(.data) - KERNEL_OFFSET) {
+        obj/i386/kernel/boot.i386.o(.data)
         *(.data)
     }
     /* readonly data */

@@ -215,6 +215,6 @@ void kmain() {
         "movl   %%esp, %%eax;" :
         "=a"(esp));
     printf("ebp=%p esp=%p eip=%p\r\n", ebp, esp, eip);
-    printf("%u bytes of free memory\r\n", AddressSpace::free);
+    printf("%uk of free memory\r\n", MemoryManager::getFreePagesCount() * 4);
     halt();
 }

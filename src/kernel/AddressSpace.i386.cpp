@@ -26,6 +26,14 @@
  * Computes a physical address for a virtual kernel address.
  */
 #define PHYSADDR(x)     ((void*)((char*)x - (uint32_t)(&CODE - &PHYS)))
+/**
+ * The index in a paging directory, that corresponds to an address.
+ */
+#define DIRINDEX(x)     ((uint32_t)(x) >> 22)
+/**
+ * The index in a paging table, that corresponds to an address.
+ */
+#define TABLEINDEX(x)   (((uint32_t)(x) >> 12) & 1023)
 
 /**
  * The start of the kernel code in the physical address range.
@@ -216,13 +224,20 @@ public:
             return false;
         }
         pageTable_t& dir = *(pageTable_t*)getPhysicalAddress(this);
-        uint32_t& dirEntry = dir[(uint32_t)virt >> 22];
+        uint32_t& dirEntry = dir[DIRINDEX(virt)];
         pageTable_t* table;
         if (ISUNUSED(dirEntry)) {
-            printf("MUST ALLOCATE NEW TABLE\r\n");
-            halt();
-            // table = (pageTable_t*)
-                // ((uint32_t)allocate() | PA_WRITABLE | PA_PRESENT);
+            uint32_t idx = MemoryManager::allocate();
+            if (idx == -1) {
+                table = (pageTable_t*)INVALID_PTR;
+            } else {
+                table = (pageTable_t*)(idx * MEMPAGE_SIZE);
+                dirEntry = (uint32_t)table | PA_WRITABLE | PA_PRESENT;
+                memset(table, 0, MEMPAGE_SIZE);
+                printf("%p\r\n", table);
+                dump();
+                halt();
+            }
         } else {
             table = (pageTable_t*)TRUNC(dirEntry);
         }
@@ -231,7 +246,7 @@ public:
             errno = ENOMEM;
             result = false;
         } else {
-            uint32_t& tableEntry = table->data[((uint32_t)virt >> 12) & 1023];
+            uint32_t& tableEntry = table->data[TABLEINDEX(virt)];
             uint32_t value = (uint32_t)phys | attr;
             if (ISUNUSED(tableEntry)) {
                 tableEntry = value;
@@ -258,12 +273,12 @@ public:
                             ///< requested.
     ) {
         uint32_t result;
-        const uint32_t dir = contents[(uint32_t)virt >> 22];
+        const uint32_t dir = contents[DIRINDEX(virt)];
         if (ISUNUSED(dir)) {
             result = 0;
         } else {
             const pageTable_t* table = (pageTable_t*)TRUNC(dir);
-            result = table->data[((uint32_t)virt >> 12) & 1023];
+            result = table->data[TABLEINDEX(virt)];
         }
         return result;
     }
@@ -409,35 +424,40 @@ public:
         return result;
     }
 
-    // /**
-     // * Maps a free memory block to the next available address of free kernel
-     // * memory. See @ref free for details.
-     // */
-    // static void mapFree(
-        // const void* phys,   ///< The physical address to be mapped. Must be
-                            // ///< aligned to a page boundary.
-        // size_t size         ///< The size of the memory range to be mapped.
-                            // ///< Must be a multiple of the page size.
-    // ) {
-        // printf("mapFree not implemented");
-        // halt();
-        // const pageTable_t* kernelTable = (pageTable_t*)
-            // kernel.getVirtualAddress(
-                // (void*)TRUNC(((AddressSpaceImpl*)&kernel)->contents[1023]));
-        // for (; size > 0 && free < &CODE; size -= PAGESIZE) {
-            // bool found = false;
-            // for (size_t i = 0; i < 1024 && !found; i++) {
-                // uint32_t entry = kernelTable->data[i];
-                // found = entry != 0 && TRUNC(entry) == (uint32_t)phys;
-            // }
-            // if (!found) {
-                // if (kernel.map(free, phys, PAGESIZE, false, false)) {
-                    // free = (void*)((char*)free + PAGESIZE);
-                // }
-            // }
-            // phys = (void*)((char*)phys + PAGESIZE);
-        // }
-    // }
+    /**
+     * Reports free memory blocks to the @ref MemoryManager. Every memory block
+     * in question will be checked, whether it is used by the kernel. In this
+     * case, it will not be reported as free memory.
+     */
+    static void reportFree(
+        const void* phys,   ///< The physical address of the memory block. Must
+                            ///< be aligned to a page boundary.
+        size_t size         ///< The size of the memory range. Must be a
+                            ///< multiple of the page size.
+    ) {
+        if (ATTR(size) != 0 || ATTR(phys) != 0) {
+            return;
+        }
+        if (((char*)phys + size < (char*)phys) && ((char*)phys + size != 0)) {
+            size = (char*)0 - (char*)phys;
+        }
+        uint32_t old = (uint32_t)phys;
+        for (; size > 0; size -= MEMPAGE_SIZE) {
+            bool used = false;
+            if (phys < &CODE) {
+                uint32_t dir = ((AddressSpaceImpl*)&kernel)->
+                    contents[DIRINDEX(phys)];
+                if (!ISUNUSED(dir)) {
+                    pageTable_t& table = *(pageTable_t*)TRUNC(dir);
+                    used = !ISUNUSED(table[TABLEINDEX(phys)]);
+                }
+            }
+            if (!used) {
+                MemoryManager::markAsFree((uint32_t)phys >> 12);
+            }
+            phys = (void*)((char*)phys + MEMPAGE_SIZE);
+        }
+    }
 
     /**
      * Evaluates the information provided by the multiboot infostructure. The
@@ -518,9 +538,9 @@ public:
                     ((const char*)descr + descr->size + 4);
             }
         } else*/ if (info->flags & MULTIBOOT_INFO_MEMORY) {
-            // mapFree(nullptr, TRUNC(min(info->mem_lower, 639) * 1024));
-            // mapFree((void*)0x100000, TRUNC(min(info->mem_upper * 1024,
-                // (uint32_t)&CODE - 0x100000)));
+            reportFree(nullptr, TRUNC(min(info->mem_lower, 639) * 1024));
+            reportFree((void*)0x100000, TRUNC(min(info->mem_upper * 1024,
+                (uint32_t)&CODE - 0x100000)));
         } else {
             printf("No memory information provided by bootloader.\r\n");
             halt();
@@ -830,12 +850,12 @@ void* AddressSpace::getPhysicalAddress(const void* virt) {
     if (virt >= &CODE) {
         return (char*)virt - (uint32_t)(&CODE - &PHYS);
     }
-    uint32_t dir = ((AddressSpaceImpl*)this)->contents[(uint32_t)virt >> 22];
+    uint32_t dir = ((AddressSpaceImpl*)this)->contents[DIRINDEX(virt)];
     if (ISUNUSED(dir)) {
         return INVALID_PTR;
     }
     pageTable_t& table = *(pageTable_t*)TRUNC(dir);
-    uint32_t result = table[((uint32_t)virt >> 12) & 1023];
+    uint32_t result = table[TABLEINDEX(virt)];
     if (ISUNUSED(result)) {
         return INVALID_PTR;
     } else {
@@ -858,5 +878,3 @@ bool AddressSpace::isPagingEnabled() {
     return (result & 0x80000000) != 0;
 }
 #endif
-
-const void* AddressSpace::free = nullptr;
