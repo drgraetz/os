@@ -418,11 +418,11 @@ class _Platform:
       global _use_bitcode
       name, platform_name = splitext(splitext(source_file)[0])
       dir = relpath(dirname(source_file), "src")
-      result = join("obj", self.name, dir, basename(name) + ".o")
-      # if platform_name == "" and _use_bitcode:
-         # bitcode = join("bc", dir, basename(name) + ".bc")
-         # self.__clang(source_file, bitcode)
-         # self.__clang(bitcode, result)
+      if platform_name == "":
+         outfile = basename(name) + ".o"
+      else:
+         outfile = basename(name) + platform_name + ".o"
+      result = join("obj", self.name, dir, outfile)
       if platform_name[1:] == self.name or platform_name == "":
          self.__clang(source_file, result)
       else:
