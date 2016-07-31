@@ -7,10 +7,24 @@
  * The i386-specific implementation of the address mangement.
  */
 
-#define PAGESIZE        4096
-#define TRUNC(x)        ((uint32_t)(x) & ~(PAGESIZE - 1))
-#define ATTR(entry)     (((uint32_t)entry) & (PAGESIZE - 1))
+/**
+ * Truncates an address to the start of the corresponding memory page. The
+ * result is uint32_t and therefore must be casted into a pointer type in most
+ * cases.
+ */
+#define TRUNC(x)        ((uint32_t)(x) & ~(MEMPAGE_SIZE - 1))
+/**
+ * Yields to the attributes of a paging dir/table entry or the offset within
+ * a memory page.
+ */
+#define ATTR(entry)     (((uint32_t)entry) & (MEMPAGE_SIZE - 1))
+/**
+ * True, if a given directory/table entry is unused.
+ */
 #define ISUNUSED(x)     ((x) == 0)
+/**
+ * Computes a physical address for a virtual kernel address.
+ */
 #define PHYSADDR(x)     ((void*)((char*)x - (uint32_t)(&CODE - &PHYS)))
 
 /**
@@ -302,7 +316,7 @@ public:
      * Maps the kernel 1:1 and into its high memory address.
      */
     void mapKernel() {
-        const char* end = (const char*)TRUNC(&END + PAGESIZE - 1);
+        const char* end = (const char*)TRUNC(&END + MEMPAGE_SIZE - 1);
         map(PHYSADDR(&CODE), PHYSADDR(&CODE), end - &CODE, true, false);
         map(&CODE, PHYSADDR(&CODE), &READWRITE - &CODE, false, true);
         map(&READWRITE, PHYSADDR(&READWRITE), &READONLY - &READWRITE, true,
@@ -319,7 +333,7 @@ public:
         asm(
             "movl   %%ebp, %%eax" :
             "=a"(ptr) :);
-        void** end = (void**)(TRUNC(ptr) + PAGESIZE - 1);
+        void** end = (void**)(TRUNC(ptr) + MEMPAGE_SIZE - 1);
         uint32_t delta = &CODE - &PHYS;
         while (ptr < end) {
             void** next = (void**)*ptr;
@@ -388,7 +402,7 @@ public:
                             ///< page size.
     ) {
         uint32_t offset = ATTR(phys);
-        size = TRUNC(size + offset + PAGESIZE - 1);
+        size = TRUNC(size + offset + MEMPAGE_SIZE - 1);
         kernel.map(virt, (void*)TRUNC(phys), size, false, false);
         void* result = (void*)((char*)virt + offset);
         virt = (const void*)((char*)virt + size);
@@ -430,7 +444,7 @@ public:
      * data is mapped after the kernel's end.
      */
     static void evaluateMultibootData(const multiboot_info_t* info) {
-        const void* dest = (const char*)(TRUNC(&END + PAGESIZE - 1));
+        const void* dest = (const char*)(TRUNC(&END + MEMPAGE_SIZE - 1));
         info = (const multiboot_info_t*)mapBootData(dest, info, sizeof(info));
         // if (info->flags & MULTIBOOT_INFO_BOOTDEV) {
             // printf("bootdevice = %04x.%04x\r\n",
@@ -703,8 +717,8 @@ void AddressSpace::dump() {
             uint32_t endEntry;
             const char* phys = (char*)TRUNC(startEntry);
             do {
-                end += PAGESIZE;
-                phys += PAGESIZE;
+                end += MEMPAGE_SIZE;
+                phys += MEMPAGE_SIZE;
                 endEntry = ((AddressSpaceImpl*)this)->getEntry(end);
             } while (end != nullptr && (uint32_t)phys == TRUNC(endEntry) &&
                 startAttr == ATTR(endEntry));
@@ -725,7 +739,7 @@ void AddressSpace::dump() {
                 TRUNC(startEntry), attribs, userAttrs);
             start = end;
         } else {
-            start += PAGESIZE;
+            start += MEMPAGE_SIZE;
         }
     } while (start != nullptr);
     printf("===========================================\r\n");
@@ -762,10 +776,10 @@ bool AddressSpace::map(const void* virt, const void* phys, size_t size,
     if (virt >= &CODE) {
         attr |= i386::PA_GLOBAL;
     }
-    for (; size != 0; size -= PAGESIZE) {
+    for (; size != 0; size -= MEMPAGE_SIZE) {
         result &= ((AddressSpaceImpl*)this)->mapPage(virt, phys, attr);
-        virt = (char*)virt + PAGESIZE;
-        phys = (char*)phys + PAGESIZE;
+        virt = (char*)virt + MEMPAGE_SIZE;
+        phys = (char*)phys + MEMPAGE_SIZE;
     }
     return result;
 }

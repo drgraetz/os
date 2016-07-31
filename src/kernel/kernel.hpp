@@ -1,6 +1,12 @@
 #ifndef __KERNEL_HPP
 #define __KERNEL_HPP
 
+/**
+ * The size of a memory page. The value will be provided by a platform
+ * dependend header file.
+ */
+#define MEMPAGE_SIZE
+
 #include <stdint.h>
 #include PLATFORM_HEADER
 
@@ -16,7 +22,13 @@
   */
 #define INVALID_PTR         ((void*)(-1))
 
+/**
+ * Yields to the lesser of two values.
+ */
 #define min(a, b)           (((a) < (b)) ? (a) : (b))
+/**
+ * Yields to number of elements in an array.
+ */
 #define ARRAYSIZE(a)        (sizeof(a) / sizeof((a)[0]))
 
 //extern "C" void* memcpy(void*, const void*, size_t);
