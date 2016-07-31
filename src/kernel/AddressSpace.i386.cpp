@@ -343,12 +343,12 @@ public:
         // loop over all tables except for the last one, as it describes the
         // high mapped kernel
         for (size_t i = 0; i < 1023; i++) {
-            if (contents[i] == 0) {
+            if (ISUNUSED(contents[i])) {
                 continue;
             }
             pageTable_t& table = *(pageTable_t*)TRUNC(contents[i]);
             for (size_t j = 0; j < 1024; j++) {
-                if (table[j] == 0) {
+                if (ISUNUSED(table[j])) {
                     continue;
                 }
                 // check, wether the address is referenced by the kernel's
