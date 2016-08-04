@@ -1,7 +1,9 @@
 #include "kernel.hpp"
 
 /**
- * @file Implements the kernel's memory functioniality.
+ * @file
+ *
+ * Implements the kernel's memory functioniality.
  */
 
 /**

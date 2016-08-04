@@ -326,7 +326,7 @@ public:
      *   address range.
      * - The memory management unit is activated.
      * - The available system memory is reported to be free by invoking
-     *   @ref MemoryManager::markAsFree(const void*)
+     *   @ref MemoryManager::markAsFree(const uint32_t)
      */
     static void init(
         void*   data    ///< Pointer to an architecture specific data
