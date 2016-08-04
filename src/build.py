@@ -210,7 +210,7 @@ class _Architecture:
    def get_binutil(self, name: str) -> str:
       from os.path import isfile, join
       assert(name in ["ld", "as"])
-      path = join("tools", "bin", self.triplet + "-" + name)
+      path = join(_tool_dir, "bin", self.triplet + "-" + name)
       if not isfile(path):
          _build("https://ftp.gnu.org/gnu/binutils/binutils-2.26.tar.bz2",
             self.triplet)
@@ -249,13 +249,14 @@ class _Platform:
    # Returns a dictionary of all supported platforms, indexed by their name.
    @staticmethod
    def get_all() -> _ReadOnlyDict:
+      global _src_dir
       if _Platform.__all is None:
          from os import listdir
          from os.path import join
          result = {}
-         for linker_script in listdir("src/kernel"):
+         for linker_script in listdir(join(_src_dir, "kernel")):
             if (linker_script.endswith(".ld")):
-               current = _Platform(join("src/kernel", linker_script))
+               current = _Platform(join(_src_dir, "kernel", linker_script))
                result.update({current.name: current})
          _Platform.__all = _ReadOnlyDict(result)
       return _Platform.__all
@@ -348,9 +349,9 @@ class _Platform:
       if extension == ".cpp":
          command_line += ["--std=c++11"]
       includes = [
-         join("src", "include", self.name),
-         join("src", "include"),
-         join("src", "ext", "include")
+         join(_src_dir, "include", self.name),
+         join(_src_dir, "include"),
+         join(_src_dir, "ext", "include")
       ]
       for include in includes:
          command_line += ["-I", include]
@@ -364,9 +365,10 @@ class _Platform:
    def __parse_linker_script(self) -> None:
       from logging import warning
       from os.path import join
+      global _src_dir
       if self.__architecture is not None:
          return
-      script_path = join("src/kernel", self.__name + ".ld")
+      script_path = join(_src_dir, "kernel", self.__name + ".ld")
       with open(script_path) as linker_script:
          for line in linker_script.read().splitlines():
             line = line.strip()
@@ -424,7 +426,7 @@ class _Platform:
          outfile = basename(name) + ".o"
       else:
          outfile = basename(name) + platform_name + ".o"
-      result = join("obj", self.name, dir, outfile)
+      result = join(_obj_dir, self.name, dir, outfile)
       if platform_name[1:] == self.name or platform_name == "":
          self.__clang(source_file, result)
       else:
@@ -629,7 +631,7 @@ def _invoke(command_line: list, working_dir: str=".") -> None:
 def __init_logging() -> None:
    from logging import DEBUG, ERROR, FileHandler, Formatter, getLogger, INFO, \
       LogRecord, WARNING, StreamHandler
-   from os.path import basename, join, splitext
+   from os.path import abspath, basename, dirname, join, splitext
    from sys import argv
    
    
@@ -643,6 +645,7 @@ def __init_logging() -> None:
       
       def format(self, record: LogRecord) -> str:
          from os import linesep
+         global _no_color, _max_line_width
          assert(isinstance(record, LogRecord))
          # name, levelno, levelname, pathname, lineno, msg, args, exc_info,
          # func, sinfo
@@ -659,21 +662,25 @@ def __init_logging() -> None:
          else:
             bold = False
             color = 7
-         result = "\033[" + str(30 + color)
-         if bold:
-            result += ";1"
-         result += "m"
+         if _use_color:
+            result = "\033[" + str(30 + color)
+            if bold:
+                result += ";1"
+            result += "m"
+         else:
+            result = ""
          n = 1
          for line in record.msg.splitlines(True):
             if n == 10:
                result += "  ..."
                break
             n += 1
-            if len(line) > 76:
-               result += line[0:76] + "..."
+            if len(line) > _max_line_width:
+               result += line[0:_max_line_width - 3] + "..."
             else:
                result += line
-         result += "\033[0m"
+         if _use_color:
+            result += "\033[0m"
          return result
 
 
@@ -705,16 +712,24 @@ def __init_logging() -> None:
             ", Zeile " + str(frame.f_lineno)
       fatal(message)
 
-         
+
+   global _src_dir, _doc_dir, _logs_dir, _obj_dir, _bin_dir, _tool_dir
+   _src_dir = dirname(argv[0])
+   base_dir = dirname(_src_dir)
+   _logs_dir = join(base_dir, "logs")
+   _obj_dir = join(base_dir, "obj")
+   _doc_dir = join(base_dir, "doc")
+   _bin_dir = join(base_dir, "bin")
+   _tool_dir = join(base_dir, "tools")
    console = StreamHandler()
    console.setFormatter(__PrettyFormatter())
    console.setLevel(INFO)
    logger = getLogger()
    logger.setLevel(DEBUG)
    logger.addHandler(console)
-   _enforce_dir("logs", True)
+   _enforce_dir(_logs_dir, True)
    log_name = splitext(basename(argv[0]))[0] + ".log"
-   file = FileHandler(join("logs", log_name), "w")
+   file = FileHandler(join(_logs_dir, log_name), "w")
    file.setLevel(DEBUG)
    logger.addHandler(file)
    import sys
@@ -727,7 +742,7 @@ def __init_logging() -> None:
 def __evaluate_command_line() -> list:
    from logging import error
    from sys import argv
-   global _use_bitcode
+   global _use_color, _src_dir
    result = []
    i = 1
    targets = _Target.all
@@ -737,6 +752,8 @@ def __evaluate_command_line() -> list:
          result.append(targets[current])
       elif current == "--help" or current == "-?":
          __print_help()
+      elif current == "--no-color":
+         _use_color = False
       else:
          raise ValueError("Invalid command line option: " + current)
       i += 1
@@ -763,6 +780,7 @@ def __print_help() -> None:
    print()
    print("Valid options are:")
    print("--help, -? print this help and exit")
+   print("--no-color don't use ANSI colors for output")
    exit()
 
 
@@ -774,7 +792,7 @@ def __doc() -> None:
    """Create the doxgen documentation."""
    from logging import info, warning
    info("creating documentation")
-   _erase("doc", ["doc"])
+   _erase(_doc_dir, [_doc_dir])
    try:
       _invoke(["doxygen", "src/doxygen.config"])
    except FileNotFoundError as e:
@@ -806,15 +824,16 @@ def __doc() -> None:
 def __compile() -> None:
    """Build all binaries."""
    from logging import info
-   result = ["obj"]
-   _enforce_dir("obj")
+   global _src_dir
+   result = [_obj_dir]
+   _enforce_dir(_obj_dir)
    for platform in _Platform.get_all().values():
       info("compiling for " + platform.name)
-      for source_file in __get_files("src", [".c", ".cpp", ".S"]):
+      for source_file in __get_files(_src_dir, [".c", ".cpp", ".S"]):
          output = platform.compile(source_file)
          if output is not None:
             result.append(output)
-   _erase("obj", result)
+   _erase(_obj_dir, result)
 
 
 ##
@@ -841,19 +860,19 @@ def __link() -> None:
    from os import listdir
    from os.path import dirname, isfile, join
    __compile()
-   result = ["bin"]
-   _enforce_dir("bin")
-   for platform_name in listdir("obj"):
+   result = [_bin_dir]
+   _enforce_dir(_bin_dir)
+   for platform_name in listdir(_obj_dir):
       platform = _Platform.get_all()[platform_name]
       message = False
       linker = platform.architecture.get_binutil("ld")
-      for executable in listdir(join("obj", platform.name)):
+      for executable in listdir(join(_obj_dir, platform.name)):
          if not message:
             info("linking for " + platform.name)
             message = True
-         input_files = __get_files(join("obj", platform.name, executable))
-         output_file = join("bin", platform.name, executable)
-         script = join("src", executable, platform.name + ".ld")
+         input_files = __get_files(join(_obj_dir, platform.name, executable))
+         output_file = join(_bin_dir, platform.name, executable)
+         script = join(_src_dir, executable, platform.name + ".ld")
          result.append(output_file)
          result.append(output_file + ".map")
          if not _needs_update(output_file, input_files + [script]):
@@ -869,7 +888,7 @@ def __link() -> None:
          if isfile(script):
             command_line += ["-T", script]
          _invoke(command_line)
-   _erase("bin", result)
+   _erase(_bin_dir, result)
 
 
 ##
@@ -881,15 +900,14 @@ def __test() -> None:
    from os import listdir
    from os.path import join
    __link()
-   qemu_dir = "/cygdrive/c/Program Files/qemu"
-   for platform_name in listdir("bin"):
+   for platform_name in listdir(_bin_dir):
       info("testing " + platform_name)
       platform = _Platform.get_all()[platform_name]
       command_line = [
-         join(qemu_dir, "qemu-system-" + platform.architecture.name),
-         "-kernel", join("bin", platform.name, "kernel"),
-         "-serial", "file:" + join("logs", "test-" + platform.name + ".log"),
-         "-initrd", join("bin", platform.name, "launcher")
+         "qemu-system-" + platform.architecture.name,
+         "-kernel", join(_bin_dir, platform.name, "kernel"),
+         "-serial", "file:" + join(_logs_dir, "test-" + platform.name + ".log"),
+         "-initrd", join(_bin_dir, platform.name, "launcher")
       ]
       _invoke(command_line)
 
@@ -908,9 +926,9 @@ def __all() -> None:
 @_Target
 def __clean() -> None:
    """Delete all artifacts."""
-   _enforce_dir("obj", True)
-   _enforce_dir("bin", True)
-   _enforce_dir("doc", True)
+   _enforce_dir(_obj_dir, True)
+   _enforce_dir(_bin_dir, True)
+   _enforce_dir(_doc_dir, True)
 
 
 ##
@@ -939,7 +957,7 @@ def _build(source_url: str, target_triplet: str) -> None:
       from os.path import basename, dirname, expanduser, isfile, join
       from urllib.request import urlopen
       assert(isinstance(url, str))
-      target_dir = "tools/src"
+      target_dir = join(_tool_dir, "src")
       _enforce_dir(target_dir)
       if url.startswith("https://ftp.gnu.org/"):
          signature = url + ".sig"
@@ -1034,9 +1052,9 @@ def _build(source_url: str, target_triplet: str) -> None:
       _invoke([
          join(relpath(source, build), "configure"),
          "--quiet",
-         "--prefix=" + abspath("tools"),
-         "--with-sysroot=" + abspath("tools/lib"),
-         "--with-lib-path=" + abspath("tools/lib"),
+         "--prefix=" + abspath(_tool_dir),
+         "--with-sysroot=" + abspath(join(_tool_dir, "lib")),
+         "--with-lib-path=" + abspath(join(_tool_dir, "lib")),
          "--target=" + target_triplet,
          "--disable-nls",
          "--disable-werror"], build)
@@ -1050,7 +1068,7 @@ def _build(source_url: str, target_triplet: str) -> None:
          for file in files:
             if file.endswith(".log"):
                src = join(root, file)
-               dst = join("logs", relpath(src, build))
+               dst = join(_logs_dir, relpath(src, build))
                _enforce_dir(dirname(dst))
                rename(src, dst)
    finally:
@@ -1058,7 +1076,8 @@ def _build(source_url: str, target_triplet: str) -> None:
       _erase(build)
    return
 
-
+_max_line_width = 79
+_use_color = True
 __init_logging()
 try:
    __targets = __evaluate_command_line()
