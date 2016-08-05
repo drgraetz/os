@@ -609,7 +609,10 @@ def _invoke(command_line: list, working_dir: str=".") -> None:
    environment = {
       "PATH": environ["PATH"]
    }
-   debug(command_line)
+   command_line_str = ">"
+   for element in command_line:
+      command_line_str += " " + element
+   debug(command_line_str)
    with __ProcessLogger(DEBUG) as out_logger:
       with __ProcessLogger(ERROR) as err_logger:
          check_call(command_line, \
