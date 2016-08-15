@@ -326,7 +326,7 @@ public:
      *   address range.
      * - The memory management unit is activated.
      * - The available system memory is reported to be free by invoking
-     *   @ref MemoryManager::markAsFree(const uint32_t)
+     *   @ref MemoryManager::markAsFree(uint32_t)
      */
     static void init(
         void*   data    ///< Pointer to an architecture specific data
@@ -352,7 +352,7 @@ public:
      * @ref kmain()
      */
     static void markAsFree(
-        const uint32_t phys ///< The index of the next free memory page. Using
+        int phys 			///< The index of the next free memory page. Using
                             ///< indexing instead of actual addresses, the
                             ///< address range of available memory pages is
                             ///< significantly increased, which may come in
@@ -368,7 +368,10 @@ public:
      * @return the index of the newly allocated memory page or -1, if no free
      * memory is available.
      */
-    static uint32_t allocate();
+    static int allocate(
+		bool allowHighMemory	///< If false, only memory below the kernel's
+								///< virtual memory address is allowed.
+	);
 };
 
 /**

@@ -6,6 +6,9 @@
  * Implements the kernel's memory functioniality.
  */
 
+extern char CODE;
+#define IS_LOWMEM(x)		((x) < ((uint32_t)&CODE / MEMPAGE_SIZE))
+
 /**
  * Number of free pages of memory.
  */
@@ -16,12 +19,6 @@ static uint32_t freePagesCount;
  * a single memory page.
  */
 typedef struct freeMemoryDesc_s {
-    /**
-     * Returns the number of valid entries in the top most memory descriptor.
-     */
-    static uint32_t numberOfValidEntries() {
-        return MemoryManager::getFreePagesCount() % ARRAYSIZE(freeIndices);
-    }
     /**
      * A set of indices to free memory pages.
      */
@@ -36,31 +33,65 @@ typedef struct freeMemoryDesc_s {
  * Pointer to a descriptor holding information on the free system memory.
  */
 freeMemoryDesc_t* freeMemory = (freeMemoryDesc_t*)INVALID_PTR;
+/**
+ * Number of unused entries in the currently used memory descriptor.
+ */
+int freeEntriesInCurrentDescriptor = 0;
 
-void MemoryManager::markAsFree(const uint32_t idx) {
-    uint32_t entryIndex = freeMemoryDesc_t::numberOfValidEntries();
-    if (freeMemory == INVALID_PTR ||
-        entryIndex == ARRAYSIZE(freeMemoryDesc_t::freeIndices) - 1) {
-        freeMemoryDesc_t* phys = (freeMemoryDesc_t*)(idx * MEMPAGE_SIZE);
-        AddressSpace::kernel.map(phys, phys, MEMPAGE_SIZE, true, false);
-        AddressSpace::kernel.load();
-        phys->next = freeMemory;
-        freeMemory = phys;
-        printf("Memory table created: %u\r\n", freeMemoryDesc_t::numberOfValidEntries());
-    } else {
-        freeMemory->freeIndices[entryIndex] = idx;
-        printf("%04u: %04u\r\n", entryIndex, idx);
-        freePagesCount++;
-    }
+bool swapLowMem(int& idx) {
+	for (freeMemoryDesc_t* act = freeMemory; !IS_LOWMEM(idx); act = act->next) {
+		if (act == INVALID_PTR) {
+			return false;
+		}
+		for (size_t i = 0; i < ARRAYSIZE(act->freeIndices); i++) {
+			uint32_t temp = act->freeIndices[i];
+			if (IS_LOWMEM(temp)) {
+				act->freeIndices[i] = idx;
+				idx = temp;
+			}
+		}
+	}
+	return true;
 }
 
-uint32_t MemoryManager::allocate() {
+void MemoryManager::markAsFree(int idx) {
+	if (freeEntriesInCurrentDescriptor > 0) {
+        freeMemory->freeIndices[--freeEntriesInCurrentDescriptor] = idx;
+        freePagesCount++;
+        printf("%u: %u\r\n", freeEntriesInCurrentDescriptor, idx);
+        return;
+	}
+	freeMemoryDesc_t* phys;
+	if (!swapLowMem(idx)) {
+		return;
+	}
+	phys = (freeMemoryDesc_t*)(idx * MEMPAGE_SIZE);
+	printf("TABLE: %p\r\n", phys);
+	AddressSpace::kernel.map(phys, phys, MEMPAGE_SIZE, true, false);
+	AddressSpace::kernel.load();
+	phys->next = freeMemory;
+	freeMemory = phys;
+	freeEntriesInCurrentDescriptor = ARRAYSIZE(phys->freeIndices);
+}
+
+int MemoryManager::allocate(bool allowHighMemory) {
+	int result;
     if (freePagesCount == 0) {
         return -1;
     }
-    uint32_t idx = freeMemoryDesc_t::numberOfValidEntries();
-    uint32_t result = freeMemory->freeIndices[idx];
-    freePagesCount--;
+    if (freeEntriesInCurrentDescriptor == ARRAYSIZE(freeMemory->freeIndices)) {
+    	result = (uint32_t)freeMemory / MEMPAGE_SIZE;
+    	freeMemory = freeMemory->next;
+    	freeEntriesInCurrentDescriptor = 0;
+    } else {
+    	result = freeMemory->freeIndices[freeEntriesInCurrentDescriptor++];
+    	freePagesCount--;
+    }
+    if (!allowHighMemory) {
+    	if (!swapLowMem(result)) {
+    		return -1;
+    	}
+    }
     return result;
 }
 

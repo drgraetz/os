@@ -94,12 +94,6 @@ typedef enum {
                         ///< of page table.
     PA_GLOBAL = 256,    ///< Entry is used globally, i.e. it is not
                         ///< updated, when a new table is loaded.
-    // PA_USERMASK = 0xE00,///< Bitmask for singling out user bits.
-    // PA_UNUSED = 0x000,  ///< Page is unused.
-    // PA_FREE = 0x200,    ///< Page holds free memory.
-    // PA_USER = 0x400,    ///< Page contains user code.
-    // PA_BOOT = 0x600,    ///< Page contains bootstrap code or BIOS data.
-    // PA_KERNEL = 0xE00,  ///< Page contains kernel code.
 } pageAttributes_e;
 
 /**
@@ -164,32 +158,6 @@ public:
 //TSS TSS::cpus[4];
 
 //}*/
-// private:
-    // /*
-     // * Allocates a single page of memory.
-     // *
-     // * @return The physical address of the newly allocated memory page, or
-     // * @ref INVALID_PTR if no free memory is available.
-     // */
-    // static void* allocate(
-    // ) {
-        // if (free == nullptr) {
-            // return INVALID_PTR;
-        // }
-        // const void* old = getCurrentAddressSpace();
-        // kernel.load();
-        // void* result = (char*)free - PAGESIZE;
-        // free = result;
-        // pageTable_t* dir = (pageTable_t*)
-            // kernel.getVirtualAddress((void*)TRUNC(
-                // ((AddressSpaceImpl*)&kernel)->contents
-                // [(uint32_t)result >> 22]));
-        // if (dir != INVALID_PTR) {
-            // dir->data[((uint32_t)result >> 12) & 1023] = 0;
-        // }
-        // setCurrentAddressSpace(old);
-        // return result;
-    // }
 public:
     /**
      * The contents of this. The topmost 10 bits of every pointer select an
@@ -227,38 +195,31 @@ public:
         uint32_t& dirEntry = dir[DIRINDEX(virt)];
         pageTable_t* table;
         if (ISUNUSED(dirEntry)) {
-            uint32_t idx = MemoryManager::allocate();
+            int idx = MemoryManager::allocate(false);
             if (idx == -1) {
-                table = (pageTable_t*)INVALID_PTR;
-            } else {
-                table = (pageTable_t*)(idx * MEMPAGE_SIZE);
-                dirEntry = (uint32_t)table | PA_WRITABLE | PA_PRESENT;
-                memset(table, 0, MEMPAGE_SIZE);
-                printf("%p\r\n", table);
-                dump();
-                halt();
+            	errno = ENOMEM;
+            	return false;
             }
+			table = (pageTable_t*)(idx * MEMPAGE_SIZE);
+			//dirEntry = (uint32_t)table | PA_WRITABLE | PA_PRESENT;
+			kernel.load();
+			printf("%p\r\n", table);
+			dump();
+			memset(table, 0, MEMPAGE_SIZE);
+			halt();
         } else {
             table = (pageTable_t*)TRUNC(dirEntry);
         }
-        bool result;
-        if (table == INVALID_PTR) {
-            errno = ENOMEM;
-            result = false;
-        } else {
-            uint32_t& tableEntry = table->data[TABLEINDEX(virt)];
-            uint32_t value = (uint32_t)phys | attr;
-            if (ISUNUSED(tableEntry)) {
-                tableEntry = value;
-                result = true;
-            } else if ((tableEntry & ~(PA_DIRTY | PA_ACCESSED)) == value) {
-                result = true;
-            } else {
-                result = false;
-            }
-            errno = result ? ESUCCESS : EPERM;
-        }
-        return result;
+		uint32_t& tableEntry = table->data[TABLEINDEX(virt)];
+		uint32_t value = (uint32_t)phys | attr;
+		if (ISUNUSED(tableEntry)) {
+			tableEntry = value;
+		} else if ((tableEntry & ~(PA_DIRTY | PA_ACCESSED)) != value) {
+			errno = EPERM;
+			return false;
+		}
+		errno = ESUCCESS;
+        return true;
     }
 
     #ifdef VERBOSE
@@ -284,29 +245,6 @@ public:
     }
     #endif
 
-    // /*
-     // * Saves the currently used address space.
-     // *
-     // * @return the physical address of the currently active address space.
-     // */
-    // static const void* getCurrentAddressSpace() {
-        // const void* result;
-        // asm(
-            // "movl   %%cr3, %%eax;" :
-            // "=a"(result) :);
-        // return result;
-    // }
-    // /*
-     // * Sets the currently used address space.
-     // */
-    // static void setCurrentAddressSpace(
-        // const void* value   ///< The physical address of the new address space.
-    // ) {
-        // asm(
-            // "movl   %%eax, %%cr3;" : :
-            // "a"(value));
-    // }
-    
     /**
      * Adjusts all addresses within in address space, which are mapped to the
      * kernel data area, to the physical memory addresses.
