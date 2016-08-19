@@ -1,0 +1,30 @@
+<?xml version='1.0'?>
+<!DOCTYPE build-info SYSTEM 'buildinfo.dtd'>
+
+<build-info>
+
+	<platform name='i386' target-triplet='i386-elf' tune='i386'>
+		<linker-symbol name='bootAddr' value='1G'/>
+	</platform>
+	<!-- mfpu=vfp -->
+	<platform name='rpi' target-triplet='arm-elf-eabi' tune='arm1176jzf-s' float-abi='hard'>
+		<linker-symbol name='bootAddr' value='0x8000'/>
+	</platform>
+	
+	<signature uri='llvm.org' public-key='02119294' extension='.sig'/>
+	<signature uri='ftp.gnu.org/gnu' key-ring='https://ftp.gnu.org/gnu/gnu-keyring.gpg' extension='.sig'/>
+
+	<tool name='clang'>
+		<!-- required on Cygwin, as otherwise the number of segments exceeds the permitted maximum -->
+		<env variable='CXXFLAGS' value='-Og'/>
+		<package url='http://llvm.org/releases/3.8.1/llvm-3.8.1.src.tar.xz'>
+			<sub-package url='http://llvm.org/releases/3.8.1/cfe-3.8.1.src.tar.xz' dir='tools/clang'/>
+		</package>
+	</tool>
+	
+	<tool name='binutils' target-dependent='true'>
+		<package url='https://ftp.gnu.org/gnu/binutils/binutils-2.26.tar.bz2'/>
+		<executable name='ld'/>
+	</tool>
+
+</build-info>

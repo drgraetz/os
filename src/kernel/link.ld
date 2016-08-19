@@ -24,12 +24,12 @@ SECTIONS {
     /* uninitialized data, e.g. stack, uninitialized variables */
     .bss ALIGN(4K) : AT(ADDR(.bss) - KERNEL_OFFSET) {
     READWRITE = .;
-        obj/i386/kernel/boot.i386.o(.bss)
+        boot.*.o(.bss)
         *(.bss)
     }
     /* initialized, writable data */
     .data : AT(ADDR(.data) - KERNEL_OFFSET) {
-        obj/i386/kernel/boot.i386.o(.data)
+        boot.i386.o(.data)
         *(.data)
     }
     /* readonly data */
@@ -48,6 +48,7 @@ SECTIONS {
     }
     /* discard all other segments */
     /DISCARD/ : {
+    	*(*)
     }
 }
 END = .;

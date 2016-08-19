@@ -34,10 +34,8 @@ _start:
     movl    $_stack.end, %esp
     subl    $KERNEL_OFFSET, %esp
     movl    %esp, %ebp
+    // call kernel main((multiboot_info_t*)%ebx)
     pushl   %ebx
-    // call AddressSpace::init((multiboot_info_t*)%ebx)
-    call    _ZN12AddressSpace4initEPv
-    // call kernel main
     call    kmain
     // loop infinetly
 .size _start, . - _start

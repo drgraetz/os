@@ -1,6 +1,5 @@
 #!/bin/python3
-from macpath import dirname
-
+ 
 ##
 # @package  build
 # The contents of the build script for Dr Grätz OS (for details refer to
@@ -8,13 +7,13 @@ from macpath import dirname
 #
 # @file
 # The build script for Dr Grätz OS.
-
-
+ 
+ 
 ##
 # A directory.
 class _Directory:
-
-
+ 
+ 
     ##
     # Cnstructor.    
     def __init__(self, path: str):
@@ -22,9 +21,35 @@ class _Directory:
         assert(isinstance(path, str))
         self.__path = abspath(path)
         self.__parent = None
+     
+     
+    ##
+    # Returns a list of all sub-directories.
+    def list_dirs(self):
+        from os.path import isdir, join
+        return [_Directory(candidate)
+            for candidate in self.list_contents()
+            if isdir(candidate)]
+        return result
     
     
+    ##
+    # Returns a list of all contained file elements (directories, files and links)
+    def list_contents(self):
+        from os import listdir
+        from os.path import join
+        result = [join(self.__path, candidate)
+            for candidate in listdir(self.__path)]
+        return result
+        
     
+    
+    ##
+    # Returns the path of this.
+    def __str__(self) -> str:
+        return self.__path
+     
+     
     ##
     # Returns a sub-directory.
     def get(self, rel_path: str):
@@ -34,6 +59,13 @@ class _Directory:
     
     
     ##
+    # Appends the path of this
+    def join(self, *args):
+        from os.path import join
+        return join(self.__path, *args)
+     
+     
+    ##
     # Static initializer. Must be called prior to any other usage of
     # _Directory.
     @staticmethod
@@ -42,16 +74,16 @@ class _Directory:
         from os.path import dirname
         from sys import argv
         _Directory.src = _Directory(dirname(argv[0]))
-        base_dir = _Directory.src.parent
-        _Directory.logs = base_dir.enforce("logs", True)
+        _Directory.base = _Directory.src.parent
+        _Directory.logs = _Directory.base.enforce("logs", True)
         _Directory.logs.__create_log_file()
         info("preparing directories")
-        _Directory.obj = base_dir.enforce("obj", _CommandLine.rebuild)
-        _Directory.doc = base_dir.enforce("doc", True)
-        _Directory.bin = base_dir.enforce("bin", _CommandLine.rebuild)
-        _Directory.tool = base_dir.enforce("tools")
-    
-    
+        _Directory.obj = _Directory.base.enforce("obj", _CommandLine.rebuild)
+        _Directory.doc = _Directory.base.enforce("doc", True)
+        _Directory.bin = _Directory.base.enforce("bin", _CommandLine.rebuild)
+        _Directory.tool = _Directory.base.enforce("tools")
+     
+     
     ##
     # Creates a log file in the "logs" directory named like the executable.
     def __create_log_file(self):
@@ -62,6 +94,8 @@ class _Directory:
         file = FileHandler(join(_Directory.logs.path, log_name), "w")
         file.setLevel(DEBUG)
         getLogger().addHandler(file)
+    
+    
     ##
     # Enforces the presence of a directory. If not already present, the directory
     # and all required parent directories are created. Raises an exception, in case
@@ -83,8 +117,8 @@ class _Directory:
         if clear_contents:
             result.erase_contents()
         return result
-
  
+  
     ##
     # Returns a list of files within this and all sub-directories. A list of
     # file extensions can be provided. If left to None, all files will be
@@ -102,15 +136,15 @@ class _Directory:
             result += [join(root_dir, file) for file in files \
                 if extensions is None or splitext(file)[1] in extensions]
         return result
-    
-    
+     
+     
     ##
     # Returns a list of all header files, i.e. all files with the extensions
     # .h and .hpp
     def get_header_files(self):
         return self.get_files([".h", ".hpp"])
-    
-    
+     
+     
     ##
     # Returns the parent of this.
     @property
@@ -119,32 +153,53 @@ class _Directory:
         if self.__parent is None:
             self.__parent = _Directory(dirname(self.__path))
         return self.__parent
-    
+     
     ##
     # Return the path to this.
     @property
     def path(self) -> str:
         return self.__path
-    
-    
+     
+     
+    ##
+    # Returns the name of this.
+    @property
+    def name(self) -> str:
+        from os.path import basename
+        return basename(self.__path)
+     
+     
     ##
     # Erases all contents of this except for a list of files which shall not be
     # deleted. The erase machanisms distingushes between symbol links (which are
     # unlinked), directories (which are recursively deleted), and files (which are
     # removed). Raises an exception, if a file, which is not explicitly excluded,
     # cannot be erased.
-    def erase_contents(self, keep_files: list=[]) -> None:
-        from os import remove, rmdir, unlink, walk
+    def erase_contents(self, keep_files: list=[], erase_me: bool=False) -> None:
+        from os import listdir, remove, rmdir, unlink, walk
         from os.path import isdir, islink, join
         for file in reversed(self.get_files(None, True)):
-            if islink(file):
+            if file in keep_files:
+                pass
+            elif islink(file):
                 unlink(file)
             elif isdir(file):
-                rmdir(file)
+                if len(listdir(file)) == 0:
+                    rmdir(file)
             else:
                 remove(file)
-     
-     
+        if erase_me and len(keep_files) == 0:
+            rmdir(self.__path)
+    
+    
+    ##
+    # Returns an absolute path relative to this.
+    def rel_path(self, path: str) -> str:
+        from os.path import relpath
+        assert(isinstance(path, str))
+        return relpath(path, self.__path)
+      
+      
 ##
 # A dictionary, that cannot be changed. It wraps an underlying dictionary.
 # However, the underlying dictionary can be changed and these changes will
@@ -154,47 +209,51 @@ class _ReadOnlyDict:
     def __init__(self, base: dict):
         assert(isinstance(base, dict))
         self.__base = base
-    
-    
+     
+     
     ## Returns an item by its index.
     def __getitem__(self, key):
         return self.__base[key]
-    
-    
+     
+     
     ## Returns an iterator on this.
     def __iter__(self):
         return self.__base.__iter__()
-    
-    
+     
+     
     ## Checks, wether an item is contained in this.
     def __contains__(self, item):
         return item in self.__base
-    
-    
+     
+     
     ## Returns a list of all values.
     def values(self):
         return self.__base.values()
-    
-    
+     
+     
     ## Returns a dict_keys of all keys
     def keys(self):
         return self.__base.keys()
-
-
+    
+    ## Returns a string representation of this.
+    def __str__(self) -> str:
+        return self.__base.__str__()
+ 
+ 
 ##
 # A list, that cannot be changed. It wraps an underlying list.
 # However, the underlying list can be changed and these changes
 # will effect this.
 class _ReadOnlyList:
-    
-    
+     
+     
     ##
     # Constructor.
     def __init__(self, base: list):
         assert(isinstance(base, list))
         self.__base = base
-    
-    
+     
+     
     ##
     # Creates a _ReadOnlyList containing all elements of this
     # and the elements of the other list.
@@ -203,443 +262,101 @@ class _ReadOnlyList:
         if isinstance(other, _ReadOnlyList):
             return _ReadOnlyList(self.__base + other.__base)
         return _ReadOnlyList(self.__base + other)
-    
-    
+     
+     
     ##
     # Returns an iterator over all elements.
     def __iter__(self):
         return self.__base.__iter__()
-    
-    
-# ##
-# # A temporary file or directory. It is typically used within a with
-# # statement. It will clean itself up in case of an exception and will
-# # prevail on a given target path on normal termination.
-# class _TempFile:
-#    
-#    def __init__(self, path: str, dir: bool = False):
-#       from os.path import dirname, isdir, isfile
-#       from tempfile import mkdtemp, mkstemp
-#       assert(isinstance(path, str))
-#       assert(isinstance(dir, bool))
-#       self.__path = path
-#       _enforce_dir(dirname(path))
-#       self.__tmp_handle = None
-#       self.__tmp_path = None
-#       if dir:
-#          if not isdir(self.__path):
-#             self.__tmp_path = mkdtemp()
-#       else:
-#          if not isfile(self.__path):
-#             self.__tmp_handle, self.__tmp_path = mkstemp()
-#    
-#    @property
-#    def exists(self) -> bool:
-#       from os.path import exists
-#       return exists(self.__path)
-#    
-#    @property
-#    def path(self) -> str:
-#       return self.__path
-#    
-#    def __close(self) -> None:
-#       from os import close
-#       if self.__tmp_handle is not None:
-#          close(self.__tmp_handle)
-#          self.__tmp_handle = None
-#    
-#    def close(self) -> None:
-#       from os import rename
-#       self.__close()
-#       if self.__tmp_path is not None:
-#          rename(self.__tmp_path, self.__path)
-#          self.__tmp_path = None
-#    
-#    def cancel(self) -> None:
-#       self.__close()
-#       if self.__tmp_path is not None:
-#          _erase(self.__tmp_path)
-#          self.__tmp_path = None
-#    
-#    def write(self, data) -> None:
-#       from os import write
-#       write(self.__tmp_handle, data)
-#    
-#    def __del__(self) -> None:
-#       self.close()
-#    
-#    def __enter__(self):
-#       return self
-#    
-#    def __exit__(self, exc_type, exc_value, traceback) -> None:
-#       if exc_value is None:
-#          self.close()
-#       else:
-#          self.cancel()
-# 
-# 
-# ##
-# # Annotation used for annotationg build targets.
-# class _Target:
-#    __all = {}
-#    __invoked = []
-#    all = _ReadOnlyDict(__all)
-#    
-#    
-#    ##
-#    # Tracks the execution of build tasks. This function is invoked instead of
-#    # the build task function. It will invoke the build task if (and only if)
-#    # it has not been previously executed.
-#    def __call__(self):
-#       if self not in _Target.__invoked:
-#          _Target.__invoked.append(self)
-#          self.__function()
-#    
-#    
-#    ##
-#    # Default constructor.
-#    def __init__(self, annotated_element):
-#       from inspect import isfunction
-#       if not isfunction(annotated_element) or \
-#          annotated_element.__code__.co_argcount != 0:
-#             raise Exception("@_Target annotation may only be used on "\
-#             "parameterless functions.")
-#       if annotated_element.__doc__ is None or \
-#          len(annotated_element.__doc__) == 0:
-#          raise Exception("@_Target annotation requires inline documentation.")
-#       name = annotated_element.__name__
-#       while name[0] == '_':
-#          name = name[1:]
-#       if name in _Target.__all:
-#          raise Exception("Another @_Target named " + name + \
-#          " has already been defined.")
-#       _Target.__all.update({name: self})
-#       self.__function = annotated_element
-#    
-#    
-#    ##
-#    # The documentation of the underlying function.
-#    @property
-#    def doc(self) -> str:
-#       return self.__function.__doc__
- 
- 
+     
+     
 ##
-# The definition of a system architecture as defined by the BFD binutils.
-class _Architecture:
-    __all = {}
-    
-    
-    ##
-    # Default constructor.
-    def __init__(self, name: str):
-        self.__name = name
-    
-    
-    ##
-    # The architecture's name as defined by the BFD binutils.
-    @property
-    def name(self) -> str:
-        return self.__name
-    
-    
-    ##
-    # Converts this into a string representation. This string representation
-    # contains:
-    # - the name
-    def __str__(self) -> str:
-        return self.__name
-    
-    
-    ##
-    # Returns the path to a binutil with a given name. Valid names are:
-    # - as for the assembler
-    # - ld for the linker
-    # If the binutil has not been installed in the "tools" directory, the
-    # required sources are downloaded and validated and the binutils are built.
-    #
-    # If the build fails, all logs are copyied into the "logs" directory.
-    def get_binutil(self, name: str) -> str:
-        from os.path import isfile, join
-        assert(name in ["ld", "as"])
-        path = join(_tool_dir, "bin", self.triplet + "-" + name)
-        if not isfile(path):
-            _build("https://ftp.gnu.org/gnu/binutils/binutils-2.26.tar.bz2",
-                self.triplet)
-        return path
-    
-    
-    ##
-    # Returns a triplet for Dr.Grätz.OS on the targeted architecture.
-    @property
-    def triplet(self) -> str:
-        return self.__name + "-elf"
-    
-    
-    ##
-    # Returns an architecture by its name. If it has not yet been defined, it
-    # is created.
-    @staticmethod
-    def get(name: str):
-        if name not in _Architecture.__all:
-            _Architecture.__all.update({name: _Architecture(name)})
-        return _Architecture.__all[name]
- 
- 
-##
-# Representation of a possible target platform. The target platforms are
-# determined by the linker scrips in the directory "src/kernel". Each linker
-# script must be named "platform".ld. I.e. the linker script
-# "src/kernel/i386.ld" corresponds to the platform i386.
-#
-# The linkerscript must define the target architecture using the OUTPUT_ARCH
-# linker command.
-class _Platform:
-    __all = None
-    __generic_includes = None
-    __generic_header_files = None
-
-
-    ##
-    # Returns a dictionary of all supported platforms, indexed by their name.
-    @staticmethod
-    def get_all() -> _ReadOnlyDict:
-        if _Platform.__all is None:
-            result = {}
-            for linker_script in _Directory.src.get_files([".ld"]):
-                current = _Platform(linker_script)
-                result.update({current.name: current})
-            _Platform.__all = _ReadOnlyDict(result)
-        return _Platform.__all
-    
-    
-    ##
-    # Constructor
-    def __init__(self, path_to_init_script: str):
-        from os.path import basename, join, splitext
-        name, ext = splitext(basename(path_to_init_script))
-        assert(ext == ".ld")
-        self.__name = name
-        self.__architecture = None
-        self.__cpu = None
-        self.__float_abi = None
-        self.__format = "elf"
-        self.__header_files = None
-        self.__include_dirs = \
-            _Platform.get_generic_includes() + \
-            [_Directory.src.get(join("include", name))]
-    
-    
-    ##
-    # The CPU of this as it is used for the mtune parameter for gcc.
-    @property
-    def cpu(self) -> str:
-        self.__parse_linker_script()
-        return self.__cpu
-    
-    
-    ##
-    # The architecture, on which this is built on.
-    @property
-    def architecture(self) -> _Architecture:
-        self.__parse_linker_script()
-        return self.__architecture
-    
-    
-    ##
-    # Converts this into a string representation. The string representation
-    # contains the name.
-    def __str__(self) -> str:
-        return self.__name
-    
-    
-    ##
-    # The float abi parameter for ARM architectures as it is used for the
-    # mfloat-abi parameter for gcc.
-    @property
-    def float_abi(self) -> str:
-        self.__parse_linker_script()
-        return self.__float_abi
- 
- 
-    ##
-    # The name of this
-    @property
-    def name(self) -> str:
-        return self.__name
-    
-    
-    ##
-    # Invoke the clang compiler to create a result file from a source file. If
-    # the file extension of the result is ".bc", llvm bitcode is generated.
-    # Compilation will be skipped, if the result file exists and is newer than
-    # the source file or any header files in the include path and its
-    # sub-directories.
-    def compile(self, source_file: str, result: str) -> None:
-        from os.path import dirname, splitext
-        assert(isinstance(source_file, str))
-        assert(isinstance(result, str))
-        if not _needs_update(result,
-            self.header_files +
-            _Directory(dirname(source_file)).get_header_files()):
-            return
-        _Directory(dirname(result)).enforce()
-        command_line = [
-            "clang",
-            "-c", source_file,
-            "-nostdinc",
-            "-o", result,
-            "-fno-rtti",
-            "-DVERBOSE",
-        ]
-        if result.endswith(".bc"):
-            command_line += ["-emit-llvm"]
+# A temporary file or directory. It is typically used within a with
+# statement. It will clean itself up in case of an exception and will
+# prevail on a given target path on normal termination.
+class _TempFile:
+     
+     
+    def __init__(self, path: str, dir: bool = False):
+        from os.path import dirname, isdir, isfile
+        from tempfile import mkdtemp, mkstemp
+        assert(isinstance(path, str))
+        assert(isinstance(dir, bool))
+        self.__path = path
+        _Directory(dirname(path)).enforce()
+        self.__tmp_handle = None
+        self.__tmp_path = None
+        if dir:
+            self.__tmp_path = mkdtemp()
         else:
-            command_line += [
-                "--target=" + self.target,
-                "-mtune=" + self.cpu
-            ]
-            if self.float_abi is not None:
-                command_line += ["-mfloat-abi=" + self.float_abi]
-        extension = splitext(source_file)[1]
-        if extension == ".cpp":
-            command_line += ["--std=c++11"]
-        for include in self.includes + _Platform.get_generic_includes():
-            command_line += ["-I", include.path]
-        _invoke(command_line)
-    
-    
-    ##
-    # Returns a list of all platform specific include directories.
+            if not isfile(self.__path):
+                self.__tmp_handle, self.__tmp_path = mkstemp()
+
+     
     @property
-    def includes(self) -> _ReadOnlyList:
-        from os.path import join
-        return _ReadOnlyList([
-            _Directory.src.get(join("include", self.name))
-        ])
-    
-    ##
-    # Parses the linker script to determine the values of the following
-    # properties:
-    # - architecture
-    def __parse_linker_script(self) -> None:
-        from logging import warning
-        from os.path import join
-        global _src_dir
-        if self.__architecture is not None:
-            return
-        script_path = join(_Directory.src.path, "kernel", self.__name + ".ld")
-        with open(script_path) as linker_script:
-            for line in linker_script.read().splitlines():
-                line = line.strip()
-                if len(line) == 0:
-                    continue
-                if line.startswith("OUTPUT_ARCH(") and line.endswith(")"):
-                    self.__architecture = _Architecture.get(line[12:-1])
-                elif line.startswith("OUTPUT_FORMAT(") and line.endswith(")") and \
-                    self.__architecture is None:
-                    self.__architecture = "elf-" + _Architecture.get(line[14:-1])
-                elif line.startswith("/*") and line.endswith("*/"):
-                    line = line[2:-2].strip().split()
-                    if len(line) < 3 or line[1] != "=":
-                        continue
-                    if line[0] == "CPU":
-                       self.__cpu = line[2]
-                    elif line[0] == "FLOAT-ABI":
-                       self.__float_abi = line[2]
-        if self.__cpu is None:
-            warning("/* CPU = value */ not found in " + script_path +
-                ", defaulting to \"generic\"")
-            self.__cpu = "generic"
-        if self.__architecture.name == "arm":
-            if self.__float_abi is None or self.__float_abi not in \
-                ["soft", "softfp", "hard"]:
-                warning("/* FLOAT-ABI = value */ invalid for arm in " + \
-                    script_path + ", defaulting to \"soft\"")
-                self.__float_abi = "soft"
+    def exists(self) -> bool:
+        from os.path import exists
+        return exists(self.__path)
+
+     
+    @property
+    def path(self) -> str:
+        return self.__path
+
+     
+    def __close(self) -> None:
+        from os import close
+        if self.__tmp_handle is not None:
+            close(self.__tmp_handle)
+            self.__tmp_handle = None
+     
+
+    def close(self) -> None:
+        from os import rename
+        self.__close()
+        if self.__tmp_path is not None:
+            rename(self.__tmp_path, self.__path)
+            self.__tmp_path = None
+
+     
+    def cancel(self) -> None:
+        from os import remove, rmdir
+        from os.path import isdir, isfile
+        self.__close()
+        if isfile(self.__path):
+            remove(self.__path)
+        elif isdir(self.__path) is None:
+            _Directory(self.__path).erase_contents()
+            rmdir(self.__path)
+        self.__tmp_path = None
+        self.__tmp_handle = None
+   
+     
+    def write(self, data) -> None:
+        from os import write
+        write(self.__tmp_handle, data)
+   
+   
+    @property
+    def tmp_path(self):
+         return self.__tmp_path
+   
+     
+    def __del__(self) -> None:
+        self.close()
+   
+     
+    def __enter__(self):
+        return self
+   
+     
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        if exc_value is None:
+            self.close()
         else:
-            if self.__float_abi is not None:
-                warning("/* FLOAT-ABI = value */ has no effect for non arm in " + \
-                    script_path)
-        if self.__architecture is None:
-            raise Exception(
-                "definition of OUTPUT_ARCH not found in " + script_path)
-    
-    
-    ##
-    # Returns a list of include directories, which are used for
-    # all platforms.
-    @staticmethod
-    def get_generic_includes() -> _ReadOnlyList:
-        from os.path import join
-        if _Platform.__generic_includes is None:
-            _Platform.__generic_includes = _ReadOnlyList([
-                _Directory.src.get("include"),
-                _Directory.src.get(join("ext", "include"))
-            ])
-        return _Platform.__generic_includes
-    
-    
-    ##
-    # Returns a list of all header files, which lie in one of the
-    # @ref get_generic_includes directories, but in no no directory
-    # referenced by any @ref includes of any _Platform.
-    @staticmethod
-    def get_generic_header_files() -> _ReadOnlyList:
-        if _Platform.__generic_header_files is None:
-            result = []
-            for include in _Platform.get_generic_includes():
-                result += include.get_header_files()
-            excludes = []
-            for platform in _Platform.get_all().values():
-                for include in platform.includes:
-                    excludes += include.get_header_files()
-            for exclude in excludes:
-                result.remove(exclude)
-            _Platform.__generic_header_files = _ReadOnlyList(result)
-        return _Platform.__generic_header_files
-    
-    
-    ##
-    # Returnsa list of all header files required to compile this.
-    @property
-    def header_files(self) -> _ReadOnlyList:
-        if self.__header_files is None:
-            result = _Platform.get_generic_header_files()
-            for include in self.includes:
-                result += include.get_header_files()
-            self.__header_files = result
-        return self.__header_files
-    
-    
-    ##
-    # The target triplet.
-    @property
-    def target(self) -> str:
-       self.__parse_linker_script()
-       return self.__architecture.name + "-dr.grätz-" + self.__format
-    
-    
-#    ##
-#    # Compiles a source file for the target platform.
-#    def compile(self, source_file: str) -> str:
-#       from os.path import basename, dirname, join, relpath, splitext
-#       assert(isinstance(source_file, str))
-#       global _use_bitcode
-#       name, platform_name = splitext(splitext(source_file)[0])
-#       dir = relpath(dirname(source_file), "src")
-#       if platform_name == "":
-#          outfile = basename(name) + ".o"
-#       else:
-#          outfile = basename(name) + platform_name + ".o"
-#       result = join(_obj_dir, self.name, dir, outfile)
-#       if platform_name[1:] == self.name or platform_name == "":
-#          self.__clang(source_file, result)
-#       else:
-#          return None
-#       return result
- 
- 
+            self.cancel()
+  
+  
 ##
 # Checks, wether a specific result file has to be updated. This is the case,
 # if one of the following conditions is met:
@@ -649,7 +366,7 @@ class _Platform:
 def _needs_update(result: str, input_files_and_times: list) -> bool:
    def __get_latest(files_and_times: list) -> float:
       from os.path import getmtime, isfile
-      assert(isinstance(files_and_times, list))
+      assert(isinstance(files_and_times, (list, _ReadOnlyList)))
       result = 0.0
       for file_or_time in files_and_times:
          if isinstance(file_or_time, float):
@@ -663,8 +380,8 @@ def _needs_update(result: str, input_files_and_times: list) -> bool:
             raise Exception("Unsupported type " + type(file_or_time).__name__)
          result = max(time, result)
       return result
- 
- 
+  
+  
    assert(isinstance(input_files_and_times, (list, _ReadOnlyList)))
    from os.path import exists, getmtime
    #if invokation.rebuild:
@@ -674,103 +391,111 @@ def _needs_update(result: str, input_files_and_times: list) -> bool:
    if not exists(result):
       return True
    return getmtime(result) < __get_latest(input_files_and_times)
- 
- 
+  
+  
 ##
 # Invokes a command line (a list of arguments, where the argument indexed with
 # zero is the command).
 #
 # The output and the error output is redirected to the logger with log levels
 # DEBUG and ERROR respectively.
-def _invoke(command_line: list, working_dir: str=".") -> None:
-   from logging import debug, DEBUG, ERROR, getLogger
-   from os import environ
-   from subprocess import check_call
-   from threading import Thread
-    
-    
-   ##
-   # A thread, that logs all messages to stdout 
-   class __ProcessLogger(Thread):
-      def __init__(self, log_level: int):
-         assert(isinstance(log_level, int))
-         Thread.__init__(self)
-         from os import pipe
-         self.__in, self.__out = pipe()
-         self.__log_level = log_level
-         self.start()
+def _invoke(command_line: list, working_dir: _Directory=None, env: dict = {}) -> None:
+    from logging import debug, DEBUG, ERROR, getLogger
+    from os import environ
+    from subprocess import check_call
+    from threading import Thread
+     
+     
+    ##
+    # A thread, that logs all messages to stdout 
+    class __ProcessLogger(Thread):
+        def __init__(self, log_level: int):
+            assert(isinstance(log_level, int))
+            Thread.__init__(self)
+            from os import pipe
+            self.__in, self.__out = pipe()
+            self.__log_level = log_level
+            self.start()
+   
+   
+        def run(self) -> None:
+            from os import read
+            line = ""
+            last_char = 0
+            while True:
+                try:
+                    data = read(self.__in, 1024)
+                except:
+                    break
+                try:
+                    data = data.decode("utf-8")
+                except:
+                    data = [chr(e) for e in data]
+                for char in data:
+                    line_break = False
+                    if char == "\r":
+                        line_break = True
+                    elif char == "\n":
+                        line_break = last_char != "\r"
+                    else:
+                        line += char
+                    last_char = char
+                    if line_break:
+                        getLogger().log(self.__log_level, line)
+                        line = ""
+            if line != "":
+                getLogger().log(self.__log_level, line)
+        
+        
+        @property
+        def out(self):
+            return self.__out
+  
+           
+        def close(self) -> None:
+            from os import close
+            if self.__out is not None:
+                close(self.__out)
+                self.__out = None
+            if self.__in is not None:
+                close(self.__in)
+                self.__in = None
+  
+              
+        def __enter__(self):
+            return self
+        
+        
+        def __exit__(self, exc_type, exc_value, traceback) -> None:
+             self.close()
+     
+    if working_dir is None:
+        working_dir = _Directory.base
+    assert(isinstance(command_line, list))
+    for element in command_line:
+        assert(isinstance(element, str))
+    assert(isinstance(working_dir, _Directory))
+    assert(isinstance(env, (dict, _ReadOnlyDict)))
+    # stdin, stdout, stderr
+    environment = dict(env)
+    environment.update({
+        "PATH": environ["PATH"],
+        "LANG": "en_EN.UTF-8"
+    })
+    command_line_str = ">"
+    for element in command_line:
+        command_line_str += " " + element
+    debug(environment)
+    debug(command_line_str.strip())
+    with __ProcessLogger(DEBUG) as out_logger:
+        with __ProcessLogger(ERROR) as err_logger:
+            check_call(command_line, \
+                cwd=working_dir.path, \
+                env=environment, \
+                stdout = out_logger.out, \
+                stderr = err_logger.out)
   
   
-      def run(self) -> None:
-         from os import read
-         line = ""
-         last_char = 0
-         while True:
-            try:
-               data = read(self.__in, 1024)
-            except:
-               break
-            data = data.decode("utf-8")
-            for char in data:
-               line_break = False
-               if char == "\r":
-                  line_break = True
-               elif char == "\n":
-                  line_break = last_char != "\r"
-               else:
-                  line += char
-               last_char = char
-               if line_break:
-                  getLogger().log(self.__log_level, line)
-                  line = ""
-         if line != "":
-            getLogger().log(self.__log_level, line)
-       
-       
-      @property
-      def out(self):
-         return self.__out
- 
-          
-      def close(self) -> None:
-         from os import close
-         if self.__out is not None:
-            close(self.__out)
-            self.__out = None
-         if self.__in is not None:
-            close(self.__in)
-            self.__in = None
- 
-             
-      def __enter__(self):
-         return self
-       
-       
-      def __exit__(self, exc_type, exc_value, traceback) -> None:
-         self.close()
-    
-    
-   assert(isinstance(command_line, list))
-   for element in command_line:
-      assert(isinstance(element, str))
-   assert(isinstance(working_dir, str))
-   # stdin, stdout, stderr
-   environment = {
-      "PATH": environ["PATH"]
-   }
-   command_line_str = ">"
-   for element in command_line:
-      command_line_str += " " + element
-   debug(command_line_str)
-   with __ProcessLogger(DEBUG) as out_logger:
-      with __ProcessLogger(ERROR) as err_logger:
-         check_call(command_line, \
-            cwd=working_dir, \
-            env=environment, \
-            stdout = out_logger.out, \
-            stderr = err_logger.out)
- 
- 
 ##
 # Initializes the logging for the build script. The contents of the directory
 # "logs" are erased and a new log file concated of the program name of this
@@ -785,16 +510,19 @@ def __init_logging() -> None:
         LogRecord, WARNING, StreamHandler
     from os.path import abspath, basename, dirname, join, splitext
     from sys import argv
-    
-    
+     
+     
     ##
     # Formatter for the console output. Prints  the different log levels in
     # different colors (ERROR = red, WARNING = yellow, INFO = blue,
     # other = white) and trims the lines to the screen width.
     class __PrettyFormatter(Formatter):
+        
+        
         def __init__(self):
             Formatter.__init__(self)
-       
+        
+        
         def format(self, record: LogRecord) -> str:
             from os import linesep
             global _no_color, _max_line_width
@@ -823,20 +551,20 @@ def __init_logging() -> None:
                 result = ""
             n = 1
             for line in record.msg.splitlines(True):
-                if n == 10:
+                if n == 20:
                     result += "  ..."
                     break
                 n += 1
                 if len(line) > _CommandLine.max_line_width:
-                    result += line[0:_CommandLine.max_line_width - 3] + "..." + linesep
+                    result += line[0:_CommandLine.max_line_width - 3] + "..."
                 else:
                     result += line
             if _CommandLine.use_color:
                 result += "\033[0m"
             return result
- 
- 
-    
+  
+  
+     
     ##
     # Custom exception handler. Logs the exception type plus and the exception
     # parameters followed by a stack trace.
@@ -863,8 +591,8 @@ def __init_logging() -> None:
             message += linesep + "  " + frame.f_code.co_filename + \
                 ", Zeile " + str(frame.f_lineno)
         fatal(message)
- 
- 
+  
+  
     console = StreamHandler()
     console.setFormatter(__PrettyFormatter())
     console.setLevel(INFO)
@@ -873,15 +601,15 @@ def __init_logging() -> None:
     logger.addHandler(console)
     import sys
     sys.excepthook = __exception_handler
- 
- 
+  
+  
 ##
 # The command line with its parameters
 class _CommandLine:
     max_line_width = 79
     use_color = True
     rebuild = False
-    
+     
     @staticmethod
     def evaluate() -> None:
         from sys import argv
@@ -905,24 +633,14 @@ class _CommandLine:
                 print("Failed to evaluate command line parameter: " + current)
                 print(e.args[0])
                 _CommandLine.__print_help()
-
-
+ 
+ 
     ##
     # Prints an online help to stdout.
     @staticmethod
     def __print_help() -> None:
         from sys import argv
         print("Usage: " + argv[0] + " [options]")
-        #print()
-        #print("Valid targets are (default = all):")
-#         names = list(_Target.all.keys())
-#         names.sort()
-#         for name in names:
-#             descr = _Target.all[name].doc
-#             if descr is None:
-#                 print(name)
-#             else:
-#                 print(name + "\t" + descr)
         print()
         print("Valid options are:")
         print("--help, -?            print this help and exit")
@@ -930,320 +648,691 @@ class _CommandLine:
         print("--max-line-width x    print a maximum of x characters per line (default value: 79)")
         print("--rebuild             rebuild all binaries rather than an incremental build")
         exit()
-     
-     
-# ##
-# # Creates the doxygen documentation. Logs a warning, if doxygen is not
-# # installed. The file "src/doxygen.config" is used as doxygen configuration.
-# @_Target
-# def __doc() -> None:
-#    """Create the doxgen documentation."""
-#    from logging import info, warning
-#    info("creating documentation")
-#    _erase(_doc_dir, [_doc_dir])
-#    try:
-#       _invoke(["doxygen", "src/doxygen.config"])
-#    except FileNotFoundError as e:
-#       warning("doxygen not installed - no documentation generated")
-# 
-# 
-# ##
-# # Compiles all source files in the "src" folder, if they have been changed.
-# # Object files, which have to corresponding source file, are deleted.
-# #
-# # All files with the extensions ".c", ".cpp", and ".S" within the "src"
-# # folder and all its subfolders are considered source files and compiled
-# # using the clang compiler. An platform file extension can preceed the
-# # file extension, such as ".rasppi", or ".i386". These files are only
-# # compiled for the target platform.
-# #
-# # The output file is stored in an platform dependent subfolder within
-# # the "obj" folder. The relative path of the output file to this
-# # platform dependent subfolder is identical to the relative path of
-# # the source filde to the "src" folder. The file extension of the output
-# # file is ".o".
-# #
-# # Examples:
-# # input file                  | output files
-# # ----------------------------|---------------------------------
-# # src/kernel/boot.i386.s      | obj/i386/kernel/boot.o
-# # src/kernel/main.s           | obj/*/kernel/main.o
-# @_Target
-# def __compile() -> None:
-#    """Build all binaries."""
-#    from logging import info
-#    global _src_dir
-#    result = [_obj_dir]
-#    _enforce_dir(_obj_dir)
-#    for platform in _Platform.get_all().values():
-#       info("compiling for " + platform.name)
-#       for source_file in __get_files(_src_dir, [".c", ".cpp", ".S"]):
-#          output = platform.compile(source_file)
-#          if output is not None:
-#             result.append(output)
-#    _erase(_obj_dir, result)
-# 
-# 
-# ##
-# # Link all object files, if they have been changed. For each subfolder in the
-# # architecture dependent "obj" folder, an artifact is created. The result ist
-# # stored in a architecture dependent subfolder within the "bin" folder. If the
-# # "src" folder contains a architecture dependent linker script for the
-# # artifact, it is used.
-# #
-# # Examples:
-# #
-# # input files         | output file       | linker script
-# # --------------------|-------------------+-------------------
-# # obj/i386/kernel/*.o | bin/i386/kernel   | src/kernel/i386.ld
-# # obj/rasppi/libc/*.o | bin/rasppi/libc.a | src/libc/rasppi.ld
-# #
-# # The required binutils are downloaded to "tools/src" and installed to
-# # "tools/bin".
-# #
-# @_Target
-# def __link() -> None:
-#    """Compile & link all changed files."""
-#    from logging import info
-#    from os import listdir
-#    from os.path import dirname, isfile, join
-#    __compile()
-#    result = [_bin_dir]
-#    _enforce_dir(_bin_dir)
-#    for platform_name in listdir(_obj_dir):
-#       platform = _Platform.get_all()[platform_name]
-#       message = False
-#       linker = platform.architecture.get_binutil("ld")
-#       for executable in listdir(join(_obj_dir, platform.name)):
-#          if not message:
-#             info("linking for " + platform.name)
-#             message = True
-#          input_files = __get_files(join(_obj_dir, platform.name, executable))
-#          output_file = join(_bin_dir, platform.name, executable)
-#          script = join(_src_dir, executable, platform.name + ".ld")
-#          result.append(output_file)
-#          result.append(output_file + ".map")
-#          if not _needs_update(output_file, input_files + [script]):
-#             continue
-#          _enforce_dir(dirname(output_file))
-#          command_line = [
-#             linker,
-#             "-o", output_file,
-#             "-M=" + output_file + ".map",
-#             "--nostdlib",
-#             "--strip-all"
-#          ] + input_files
-#          if isfile(script):
-#             command_line += ["-T", script]
-#          _invoke(command_line)
-#    _erase(_bin_dir, result)
-# 
-# 
-# ##
-# # Test the builds.
-# @_Target
-# def __test() -> None:
-#    """Test the builds."""
-#    from logging import info
-#    from os import listdir
-#    from os.path import join
-#    __link()
-#    for platform_name in listdir(_bin_dir):
-#       info("testing " + platform_name)
-#       platform = _Platform.get_all()[platform_name]
-#       command_line = [
-#          "qemu-system-" + platform.architecture.name,
-#          "-kernel", join(_bin_dir, platform.name, "kernel"),
-#          "-serial", "file:" + join(_logs_dir, "test-" + platform.name + ".log"),
-#          "-initrd", join(_bin_dir, platform.name, "launcher")
-#       ]
-#       _invoke(command_line)
-# 
-# 
-# ##
-# # Complete build.
-# @_Target
-# def __all() -> None:
-#    """Update and test all contents."""
-#    __test()
-#    __doc()
-# 
-# 
-# ##
-# # Delete all artefacts.
-# @_Target
-# def __clean() -> None:
-#    """Delete all artifacts."""
-#    _enforce_dir(_obj_dir, True)
-#    _enforce_dir(_bin_dir, True)
-#    _enforce_dir(_doc_dir, True)
-# 
-# 
-# ##
-# # Complete rebuild.
-# @_Target
-# def __rebuild() -> None:
-#    """Clear stale data and create all contents."""
-#    __clean()
-#    __all()
-# 
-# 
-# ##
-# # Builds a thirs party tool. This includes the following steps:
-# # - downloading and verifying the sources
-# # - unpacking the sources
-# # - configuring the bundle ("configure")
-# # - making the bundle ("make all")
-# # - installing the bundle ("make install")
-# def _build(source_url: str, target_triplet: str) -> None:
-#    ##
-#    # Downloads a source package from a given url to the tools/src directory.
-#    # Returns the path to the downloaded package. Alsow downloads the packages
-#    # signature and the corresponding key ring and verifies the package.
-#    def _download(url: str) -> str:
-#       from logging import info
-#       from os.path import basename, dirname, expanduser, isfile, join
-#       from urllib.request import urlopen
-#       assert(isinstance(url, str))
-#       target_dir = join(_tool_dir, "src")
-#       _enforce_dir(target_dir)
-#       if url.startswith("https://ftp.gnu.org/"):
-#          signature = url + ".sig"
-#          keyring = "https://ftp.gnu.org/gnu/gnu-keyring.gpg"
-#       elif url.startswith("https://www.uclibc.org/"):
-#          signature = url + ".sign"
-#          keyring = None
-#       else:
-#          raise NotImplementedError("Unsupported provider for URL " + url)
-#       for current in [url, signature, keyring]:
-#          if current is None:
-#             continue
-#          with _TempFile(join(target_dir, basename(current))) as target:
-#             if target.exists:
-#                continue
-#             info("downloading " + current)
-#             source = urlopen(current)
-#             while True:
-#                data = source.read(1024)
-#                if len(data) == 0:
-#                   break
-#                target.write(data)
-#       if signature is not None:
-#          if keyring is not None:
-#             keyring = ["--keyring", join(target_dir, basename(keyring))]
-#          else:
-#             keyring = []
-#          info("verifying " + basename(url))
-#          _invoke(["gpg"] + keyring +
-#             ["--verify", join(target_dir, basename(signature))])
-#       return join(target_dir, basename(url))
-# 
-# 
-#    ##
-#    # Unpacks an archive into a directory. The unpacked files are located in a
-#    # subdirectory of the target_dir, which is named like the archive without
-#    # its file extensions. If the archive contains a single directory, all its
-#    # contents are moved into the newly created subdirectory.
-#    def _unpack(archive: str, target_dir: str) -> str:
-#       from logging import info, warning
-#       from os import listdir, rename, rmdir
-#       from os.path import  basename, getsize, isabs, isdir, isfile, join, normpath
-#       from tarfile import open
-#       from tempfile import mkdtemp
-#       assert(isinstance(archive, str))
-#       assert(isinstance(target_dir, str))
-#       info("unpacking " + basename(archive))
-#       tar = open(archive)
-#       while True:
-#         file = tar.next()
-#         if file is None:
-#            break
-#         path = normpath(file.name)
-#         if isabs(path) or path.startswith("..") or path.startswith("/"):
-#            warning("skipping file " + path + " as its path is considered unsafe")
-#            continue
-#         if file.isfile():
-#            if not isfile(path) or file.mtime > getmtime(path) or \
-#               getsize(path) != file.size:
-#               tar.extract(file, target_dir)
-#         else:
-#            raise Exception("Unsupported file type for " + file.name + " in " +
-#               archive)
-#       contents = listdir(target_dir)
-#       if len(contents) == 1:
-#          root = join(target_dir, contents[0])
-#          if isdir(root):
-#             temp = mkdtemp()
-#             rmdir(temp)
-#             try:
-#                rename(root, temp)
-#                rmdir(target_dir)
-#                rename(temp, target_dir)
-#             except:
-#                _erase(temp)
-#                raise
-#       return target_dir
-#    
-#    
-#    from logging import info
-#    from multiprocessing import cpu_count
-#    from os import rename, walk
-#    from os.path import abspath, basename, dirname, join, relpath
-#    from tempfile import mkdtemp
-#    archive = _download(source_url)
-#    source = mkdtemp()
-#    build = mkdtemp()
-#    package = basename(archive)
-#    try:
-#       _unpack(archive, source)
-#       info("configuring " + package + " for " + target_triplet)
-#       _invoke([
-#          join(relpath(source, build), "configure"),
-#          "--quiet",
-#          "--prefix=" + abspath(_tool_dir),
-#          "--with-sysroot=" + abspath(join(_tool_dir, "lib")),
-#          "--with-lib-path=" + abspath(join(_tool_dir, "lib")),
-#          "--target=" + target_triplet,
-#          "--disable-nls",
-#          "--disable-werror"], build)
-#       info("making " + package + " for " + target_triplet)
-#       _invoke(["make", "all", "--jobs=" + str(cpu_count())], build)
-#       info("installing " + package + " for " + target_triplet)
-#       _invoke(["make", "install"], build)
-#    except:
-#       info("saving log files to logs/*")
-#       for root, dirs, files in walk(build):
-#          for file in files:
-#             if file.endswith(".log"):
-#                src = join(root, file)
-#                dst = join(_logs_dir, relpath(src, build))
-#                _enforce_dir(dirname(dst))
-#                rename(src, dst)
-#    finally:
-#       _erase(source)
-#       _erase(build)
-#    return
-
-
+      
+      
+# # ##
+# # # Creates the doxygen documentation. Logs a warning, if doxygen is not
+# # # installed. The file "src/doxygen.config" is used as doxygen configuration.
+# # @_Target
+# # def __doc() -> None:
+# #    """Create the doxgen documentation."""
+# #    from logging import info, warning
+# #    info("creating documentation")
+# #    _erase(_doc_dir, [_doc_dir])
+# #    try:
+# #       _invoke(["doxygen", "src/doxygen.config"])
+# #    except FileNotFoundError as e:
+# #       warning("doxygen not installed - no documentation generated")
+# # 
+# # 
+  
+  
+##
+# Link all object files, if they have been changed. For each sub-folder in the
+# architecture dependent "obj" folder, an artifact is created. The result is
+# stored in a architecture dependent sub-folder within the "bin" folder. If the
+# "src" folder contains a linker script for the artifact, it is used. The
+# linker script must have the name link.ld.
+#
+# Examples:
+#
+# input files         | output file       | linker script
+# --------------------|-------------------+-------------------
+# obj/i386/kernel/*.o | bin/i386/kernel   | src/kernel/link.ld
+# obj/rasppi/libc/*.o | bin/rasppi/libc.a | src/libc/link.ld
+#
+# The required binutils are downloaded to "tools/src" and installed to
+# "tools/bin".
+#
+def __link() -> None:
+    
+    def _link_for_platform(platform: _BuildInfo.Platform) -> list:
+        from logging import info
+        result = []
+        linker = platform.get_linker()
+        info("linking for " + platform.name)
+        bin_dir = _Directory.bin.enforce(platform.name)
+        for obj_dir in _Directory.obj.get(platform.name).list_dirs():
+            print(obj_dir.path + " -> " + bin_dir.path)
+    
+    generated_files = _BuildInfo.invokeForAllPlatforms(_link_for_platform)
+    _Directory.bin.erase(generated_files)
+#         for executable in _Directory.obj.get(platform.name).list_dirs():
+#             input_files = [relpath(file, executable.path) for file in executable.get_files([".o"])]
+#             output_file = join(output_dir.path, executable.name)
+#             script = join(_Directory.src.path, executable.name, platform.name + ".ld")
+#             result.append(output_file)
+#             result.append(output_file + ".map")
+#             if not _needs_update(output_file, input_files + [script]):
+#                 continue
+#             command_line = [
+#                 linker,
+#                 "-o", output_file,
+#                 "-M=" + output_file + ".map",
+#                 "--nostdlib",
+#                 "--strip-all"
+#             ] + input_files
+#             if isfile(script):
+#                 command_line += ["-T", script]
+#             _invoke(command_line, executable.path)
+#     _Directory.bin.erase_contents(result)
+#  
+#  
+# # ##
+# # # Test the builds.
+# # @_Target
+# # def __test() -> None:
+# #    """Test the builds."""
+# #    from logging import info
+# #    from os import listdir
+# #    from os.path import join
+# #    __link()
+# #    for platform_name in listdir(_bin_dir):
+# #       info("testing " + platform_name)
+# #       platform = _Platform.get_all()[platform_name]
+# #       command_line = [
+# #          "qemu-system-" + platform.architecture.name,
+# #          "-kernel", join(_bin_dir, platform.name, "kernel"),
+# #          "-serial", "file:" + join(_logs_dir, "test-" + platform.name + ".log"),
+# #          "-initrd", join(_bin_dir, platform.name, "launcher")
+# #       ]
+# #       _invoke(command_line)
+ 
+ 
 ##
 # Compile all source code files. Source code files are located within
 # the "src" folder and have one of the following extensions:
 # - .S for assembler files processed by the c preprocessor
 # - .cpp for C++ files
-def __compile() -> None:
-    from logging import info
-    from os.path import join, relpath, splitext
-    for platform in _Platform.get_all().values():
+def __compile() -> None:    
+    
+    
+    ##
+    # Returns the path of the .o file, that is compiled from a given
+    # source_file on a given platform. Returns None, if
+    # - either the source_file is not compiled for the platform (i.e.
+    #   the file extension does not contain .'platform.name'),
+    # - or the output_file already exists and is newer than the source
+    #   file and all its includes.
+    def _derive_output_file(platform: _BuildInfo.Platform, source_file: str) -> str:
+        from os.path import isfile, splitext
+        rel_path, ext = splitext(_Directory.src.rel_path(source_file))
+        obj_dir = _Directory.obj.enforce(platform.name)
+        output_file = obj_dir.join(rel_path) + ".o"
+        target_platform = splitext(rel_path)[1]
+        if target_platform != "" and target_platform != "." + platform.name:
+            return None
+        if isfile(output_file):
+            includes = platform.read_includes(source_file)
+            if not _needs_update(output_file, includes + [source_file]):
+                return None
+        return output_file
+    
+    
+    ##
+    # Compiles all files for a given platform.
+    def _compile_for_platform(platform: _BuildInfo.Platform) -> list:
+        from logging import info
+        from os.path import dirname
+        compiler = platform.get_compiler()
         info("compiling for " + platform.name)
+        result = []
         for source_file in _Directory.src.get_files([".S", ".cpp"]):
-            rel_path, ext = splitext(relpath(source_file, _Directory.src.path))
-            output_file = join(_Directory.obj.path, rel_path) + ".o"
-            rel_path, target_platform = splitext(rel_path)
-            if target_platform == "" or target_platform == platform.name:
-                platform.compile(source_file, output_file)
+            output_file = _derive_output_file(platform, source_file)
+            if output_file is None:
+                continue
+            _Directory(dirname(output_file)).enforce()
+            command_line = [
+                compiler,
+                "-c", source_file,
+                "-nostdinc",
+                "-o", output_file,
+                "-fno-rtti",
+                "-DVERBOSE",
+            ]
+            if output_file.endswith(".bc"):
+                command_line += ["-emit-llvm"]
+            else:
+                command_line += [
+                    "--target=" + platform.target_triplet,
+                    "-mtune=" + platform.tune
+                ]
+                if platform.float_abi is not None:
+                    command_line += ["-mfloat-abi=" + platform.float_abi]
+            if source_file.endswith(".cpp"):
+                command_line += ["--std=c++11"]
+            for include in platform.include_dirs:
+                command_line += ["-I", include.path]
+            _invoke(command_line)
+            result.append(output_file)
+        return result
+    
+    
+    generated_files = _BuildInfo.invokeForAllPlatforms(_compile_for_platform)
+    _Directory.obj.erase_contents(generated_files)
+
+ 
+##
+# The representation of the contents of the build_infox.xml file.
+class _BuildInfo:
+    __doc = None
+    __platforms = {}
+    __signatures = []
+    
+    
+    ##
+    # A target platform.
+    class Platform:
+        
+        
+        def __init__(self, xml):
+            from os.path import join
+            self.__name = xml.get('name')
+            self.__target_triplet = xml.get('target-triplet')
+            self.__tune = xml.get('tune')
+            self.__float_abi = xml.get('float-abi')
+            self.__includes = {}
+            self.__include_dirs = _ReadOnlyList([
+                 _Directory.src.get("include"),
+                 _Directory.src.get(join("ext", "include")),
+                 _Directory.src.get(join("include", self.name))
+            ])
+        
+        
+        ##
+        # The platform's target triplet as defined in the target-triplet
+        # attribute.
+        @property
+        def target_triplet(self) -> str:
+            return self.__target_triplet
+        
+        
+        ##
+        # The value of gcc's -mtune parameter as defined in the tune
+        # attribute.
+        @property
+        def tune(self) -> str:
+            return self.__tune
+        
+        
+        ##
+        # The value of gcc's -mfloat-abi parameter as defined in the
+        # float-abi attribute 
+        @property
+        def float_abi(self) -> str:
+            return self.__float_abi
+        
+        
+        ##
+        # The platform's name as defined in the name attribute.
+        @property
+        def name(self) -> str:
+            return self.__name
+    
+        ##
+        # Reads the include definitions of a source file and returns
+        # a list of all included files.
+        def read_includes(self, source_file: str) -> list:
+            from logging import warning
+            from os.path import abspath, dirname, isfile, join
+            if source_file in self.__includes:
+                return self.__includes[source_file]
+            result = []
+            line_no = 1
+            for line in open(source_file).readlines():
+                line = line.strip()
+                if not line.startswith("#include"):
+                    continue
+                include = line[8:].strip()
+                header = None
+                if include.startswith('"') and include.endswith('"'):
+                    candidate = join(dirname(source_file), include[1:-1])
+                    if isfile(candidate):
+                        header = candidate
+                elif include.startswith('<') and include.endswith('>'):
+                    name = include[1:-1]
+                    for include_path in self.include_dirs:
+                        candidate = include_path.join(name)
+                        if isfile(candidate):
+                            header = candidate
+                            break
+                if header is None:
+                    warning("failed to resolve #include " + include +
+                        " in " + source_file + ", line " + str(line_no))
+                    continue
+                header = abspath(header)
+                if header in result:
+                    continue
+                result.append(header)
+                line_no += 1
+            file = 0
+            while file < len(result):
+                for include in self.read_includes(result[file]):
+                    if include not in result:
+                        result.append(include)
+                file += 1
+            self.__includes.update({source_file: result})
+            return result
+    
+    
+        ##
+        # Returns a list of directories, that are included by the compiler.
+        @property
+        def include_dirs(self) -> _ReadOnlyList:
+            return self.__include_dirs
+        
+        
+        ##
+        # Returns the path to the linker for this architecture. If the linker is
+        # not installed, its sources are downloaded and it is built.
+        #
+        # If the build fails, all logs are copied into the "logs" directory.
+        def get_linker(self) -> str:
+            return _BuildInfo.Tool.get("ld", self.__target_triplet)
+        
+        
+        ##
+        # Returns the path to the compiler for this architecture. If the compiler
+        # is not installed, its sources are downloaded and it is built.
+        #
+        # If the build fails, all logs are copied into the "logs" directory.
+        def get_compiler(self) -> str:
+            return _BuildInfo.Tool.get("clang")
+    
+    
+    ##
+    # A signature definition.
+    class Signature:
+        
+        
+        def __init__(self, xml):
+            self.__uri = xml.get("uri")
+            self.__public_key = xml.get("public-key")
+            self.__key_ring = xml.get("key-ring")
+            self.__extension = xml.get("extension")
+        
+        
+        @property
+        def uri(self) -> str:
+            return self.__uri
+        
+        
+        @property
+        def public_key(self) -> str:
+            return self.__public_key
+        
+        
+        @property
+        def key_ring(self) -> str:
+            return self.__key_ring
+        
+        
+        @property
+        def extension(self) -> str:
+            return self.__extension
+    
+    
+    ##
+    # A packet definition.
+    class Package:
+        __src_dir = None
+        __unpack_list = None
+        
+        
+        def __init__(self, xml):
+            self.__url = xml.get("url")
+            self.__dir = xml.get("dir")
+            if self.__dir is None:
+                self.__dir = "."
+            self.__sub_packages = []
+            _BuildInfo._create("sub-package", _BuildInfo.Package, self.__sub_packages, xml)
+    
+        
+        @staticmethod
+        def get_src_dir() -> _Directory:
+            if _BuildInfo.Package.__src_dir is None:
+                _BuildInfo.Package.__src_dir = _Directory.tool.get("src")
+            return _BuildInfo.Package.__src_dir
+        
+        
+        @staticmethod
+        def get_unpack_list() -> str:
+            if _BuildInfo.Package.__unpack_list is None:
+                _BuildInfo.Package.__unpack_list = _Directory.tool.join(".unpack_list")
+            return _BuildInfo.Package.__unpack_list
+        
+        
+        @staticmethod
+        def __untar(archive: str, output_dir: _Directory) -> None:
+            from logging import info, warning
+            from os import rename, sep, symlink
+            from os.path import basename, dirname, exists, isabs, isdir, normpath
+            from tarfile import open
+            info("unpacking " + basename(archive))
+            tar = open(archive)
+            files = []
+            while True:
+                file = tar.next()
+                if file is None:
+                    break
+                path = normpath(file.name)
+                if isabs(path) or path.startswith("..") or path.startswith("/"):
+                    warning("skipping file " + path + " as its path is considered unsafe")
+                    continue
+                files.append(file.name)
+                if exists(output_dir.join(file.name)):
+                    continue
+                tar.extract(file, output_dir.path)
+            roots = []
+            for file in files:
+                try:
+                    root = file[:file.index(sep)]
+                except ValueError:
+                    root = file
+                if root not in roots:
+                    roots.append(root)
+            if len(roots) == 1:
+                root = output_dir.get(roots[0])
+                for file in root.list_contents():
+                    rename(file, output_dir.join(root.rel_path(file)))
+                root.erase_contents([], True)
+                symlink(".", root.path)
+    
+    
+        ##
+        # Unpacks this archive into a directory. The unpacked files are located in
+        # "tools/build/src" and and appended sub-directory, if defined so in
+        # build_info.xml
+        #
+        # @return the directory with the extracted contents
+        def unpack(self) -> _Directory:
+            from os import linesep
+            from os.path import isfile, join
+            output_dir = _BuildInfo.Package.get_src_dir().get(self.__dir)
+            unpack_list = _BuildInfo.Package.get_unpack_list()
+            if isfile(unpack_list):
+                packages = open(unpack_list).readlines()
+                unpacked = self.__url in packages or self.__url + linesep in packages
+            else:
+                unpacked = False
+            if not unpacked:
+                archive = _BuildInfo._download(self.__url)
+                _BuildInfo._verify(self.__url, archive)
+                _BuildInfo.Package.__untar(archive, output_dir)
+                file = open(unpack_list, "a")
+                file.write(self.__url + linesep)
+                file.close()
+            for sub_package in self.__sub_packages:
+                sub_package.unpack()
+            return output_dir
+    
+    
+    ##
+    # A third party tool.
+    class Tool:
+        __build_dir = None
+        __executables = {}
+        
+        
+        @staticmethod
+        def get_build_dir() -> _Directory:
+            if _BuildInfo.Tool.__build_dir is None:
+                _BuildInfo.Tool.__build_dir = _Directory.tool.enforce("build")
+            return _BuildInfo.Tool.__build_dir
+        
+        
+        @staticmethod
+        def __createTargetString(target_triplet: str) -> str:
+            if target_triplet is None:
+                return ""
+            else:
+                return " for " + target_triplet
+        
+        
+        def __init__(self, xml):
+            self.__name = xml.get("name")
+            self.__package = _BuildInfo.Package(xml.find("package"))
+            env = {}
+            for element in xml.findall("env"):
+                env.update({element.get("variable"): element.get("value")})
+            executables_nodes = xml.findall("executable")
+            if len(executables_nodes) == 0:
+                executables = [self.__name]
+            else:
+                executables = []
+                for element in executables_nodes:
+                    executables.append(element.get("name"))
+            for executable in executables:
+                if executable in _BuildInfo.Tool.__executables:
+                    raise Exception("Ambigious definition of executable '" + executable + "' in buildinfo.xml")
+                _BuildInfo.Tool.__executables.update({
+                    executable: self
+                })
+            if self.__name != "clang":
+                bin_dir = _Directory.tool.get("bin")
+                env.update({
+                    "CC": bin_dir.join("clang"),
+                    "CXX": bin_dir.join("clang++")
+                })
+            self.__env = _ReadOnlyDict(env)
+        
+        
+        def __configure(self, source_dir: _Directory, target_triplet: str):
+            from logging import info
+            from os.path import isfile
+            info("configuring " + self.__name +
+                _BuildInfo.Tool.__createTargetString(target_triplet))
+            configure = source_dir.join("configure")
+            cmake_list = source_dir.join("CMakeLists.txt")
+            build_dir = _BuildInfo.Tool.get_build_dir()
+            build_dir.erase_contents()
+            if isfile(cmake_list):
+                command_line = [
+                    "cmake",
+                    "-Wno-dev",
+                    build_dir.rel_path(source_dir.path),
+                    "-G", "Unix Makefiles",
+                    "-DCMAKE_INSTALL_PREFIX=" + _Directory.tool.path]
+            elif isfile(configure):
+                lib_path = _Directory.tool.rel_path("lib")
+                command_line = [
+                    build_dir.rel_path(configure),
+                    "--quiet",
+                    "--prefix=" + _Directory.tool.path,
+                    "--with-sysroot=" + lib_path,
+                    "--with-lib-path=" + lib_path,
+                    "--disable-nls",
+                    "--disable-werror"]
+            else:
+                raise Exception("Unsupported build chain for " + self.name)
+            if target_triplet is not None:
+                command_line += ["--target=" + target_triplet]
+            self.__invoke(command_line)
+        
+        
+        @property
+        def name(self) -> str:
+            return self.__name
+    
+    
+        def __make(self, target_triplet: str) -> None:
+            from logging import info
+            from multiprocessing import cpu_count
+            info("making " + self.name +
+                _BuildInfo.Tool.__createTargetString(target_triplet))
+            self.__invoke(["make", "all", "--jobs=" + str(cpu_count())])
+        
+        
+        def __install(self, target_triplet: str) -> None:
+            from logging import info
+            info("installing " + self.name +
+                _BuildInfo.Tool.__createTargetString(target_triplet))
+            self.__invoke(["make", "install"])
+        
+        
+        def __invoke(self, command_line: list) -> None:
+            assert(isinstance(command_line, list))
+            _invoke(command_line, _BuildInfo.Tool.get_build_dir(), self.__env)
+
+
+        ##
+        # Builds this. The required sources are downloaded and verified.
+        def build(self, target_triplet:str) -> None:
+            from os import remove
+            source_dir = self.__package.unpack()
+            _BuildInfo.Tool.get_build_dir().erase_contents()
+            try:
+                self.__configure(source_dir, target_triplet)
+                self.__make(target_triplet)
+                self.__install(target_triplet)
+            except:
+                _BuildInfo.Tool.__save_logs()
+                raise
+            remove(_BuildInfo.Package.get_unpack_list())
+            _BuildInfo.Package.get_src_dir().erase_contents()
+            
+    
+        ##
+        # Returns the path to a third-party tool. If the tool is not yet been installed
+        # within the tools directory, its sources are downloaded and it is installed.
+        @staticmethod
+        def get(name: str, target_triplet: str=None) -> str:
+            from os.path import isfile
+            path = _Directory.tool.get("bin").join(name)
+            if not isfile(path):
+                _BuildInfo.Tool.__executables[name].build(target_triplet)
+            return path
+        
+        
+        ##
+        # Moves all log files from the build_dir and all sub-directories to
+        # the "logs" directory.
+        @staticmethod
+        def __save_logs() -> None:
+            from logging import info
+            from os import rename
+            from os.path import dirname
+            info("saving log files to logs/*")
+            build_dir = _BuildInfo.Tool.get_build_dir()
+            for log in build_dir.get_files([".log"]):
+                rel_path = build_dir.rel_path(log)
+                dst = _Directory.logs.join(rel_path)
+                _Directory.logs.enforce(dirname(dst))
+                rename(log, dst)
+         
+         
+    ##
+    # Downloads an URL to "tools/src".
+    @staticmethod
+    def _download(url_str: str) -> str:
+        from logging import info, warning
+        from os.path import basename, isfile
+        from urllib.request import urlopen
+        from urllib.parse import urlparse
+        url = urlparse(url_str)
+        output_file = _Directory.tool.enforce("repos").join(basename(url.path))
+        with _TempFile(output_file) as tmp:
+            if not tmp.exists:
+                info("downloading " + url_str)
+                if url.scheme != "https":
+                    warning("protocol of " + url_str + " is not secured; consider using https instead")
+                source = urlopen(url_str)
+                while True:
+                    data = source.read(4096)
+                    if len(data) == 0:
+                        break
+                    tmp.write(data)
+        return output_file
+    
+    
+    ##
+    # Invokes a function for all target platforms. The function takes the
+    # targeted platform as its only parameter. It returns a list of generated
+    # files.
+    @staticmethod
+    def invokeForAllPlatforms(delegate) -> list:
+        _BuildInfo.__read()
+        result = []
+        for platform in _BuildInfo.__platforms.values():
+            result += delegate(platform)
+        return result
+    
+    
+    ##
+    # Reads the contents of the build_info.xml file and validates them using DTD,
+    # if required.
+    @staticmethod
+    def __read():
+        from lxml import etree
+        if _BuildInfo.__doc is not None:
+            return
+        file = _Directory.src.get('buildinfo.xml').path
+        parser = etree.XMLParser(dtd_validation=True, remove_blank_text=True)
+        _BuildInfo.__doc = etree.parse(file, parser)
+        _BuildInfo._create("platform", _BuildInfo.Platform, _BuildInfo.__platforms, _BuildInfo.__doc)
+        _BuildInfo._create("tool", _BuildInfo.Tool, None, _BuildInfo.__doc)
+        _BuildInfo._create("signature", _BuildInfo.Signature, _BuildInfo.__signatures, _BuildInfo.__doc)
+    
+    
+    ##
+    # Creates a set of named objects from an XML root.
+    @staticmethod
+    def _create(tag: str, element_type: type, result: dict, root) -> None:
+        assert(isinstance(tag, str))
+        assert(isinstance(element_type, type(_BuildInfo)))
+        assert(isinstance(result, (dict, list, type(None))))
+        for element in root.findall(tag):
+            current = element_type(element)
+            if isinstance(result, dict):
+                result.update({current.name : current})
+            elif result is not None:
+                result.append(current)
+    
+
+    ##
+    # Returns the home directory, that is used for pgp signatures.
+    @staticmethod
+    def get_gpg_dir() -> _Directory:
+        return _Directory.tool.enforce("gpg")
+
+
+    ##
+    # Invoke GPG
+    @staticmethod
+    def __gpg(parameters: list) -> None:
+        command_line = ["gpg", "--homedir", ".", "--verbose"]
+        _invoke(command_line + parameters, _BuildInfo.get_gpg_dir())
+    
+    
+    ##
+    # Verifies a downloaded file by downloading the corresponding signature
+    # and invoking gpg --verify
+    def _verify(url: str, local_path: str):
+        from logging import info
+        from os.path import basename
+        from urllib.parse import urlparse
+        _BuildInfo.__read()
+        info("verifying " + basename(local_path))
+        url = urlparse(url)
+        uri = url.netloc + url.path
+        for candidate in _BuildInfo.__signatures:
+            if not uri.startswith(candidate.uri):
+                continue
+            signature = _BuildInfo._download(url.scheme + "://" + uri + candidate.extension)
+            if candidate.public_key is not None:
+                _BuildInfo.__gpg(["--keyserver", "pgp.mit.edu", "--recv-keys", candidate.public_key])
+            if candidate.key_ring is None:
+                keyring = []
+            else:
+                keyfile = _BuildInfo.get_gpg_dir().rel_path(_BuildInfo._download(candidate.key_ring))
+                keyring = ["--keyring", keyfile]
+            _BuildInfo.__gpg(keyring + ["--verify", _BuildInfo.get_gpg_dir().rel_path(signature)])
+            return
+        raise Exception("No signature definition for " + uri)
 
 
 _CommandLine.evaluate()
 __init_logging()
 _Directory.__static_init__()
 __compile()
+__link()

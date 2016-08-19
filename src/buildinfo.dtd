@@ -1,0 +1,71 @@
+<!-- The root element of buildinfo.xml -->
+<!ELEMENT build-info (platform+,signature*,tool*)>
+
+<!-- The definition of a target platform. A platform is referenced by
+     its _name_. For each platform the target-triplet and the parameters
+     tune and float-abi are defined, which are used to invoke the compiler.
+     
+     Multiple symbols may be defined, which are used to invoke the linker. -->
+<!ELEMENT platform (linker-symbol*)>
+<!ATTLIST platform
+	name				ID				#REQUIRED
+	target-triplet		CDATA			#REQUIRED
+	tune				CDATA			#REQUIRED
+	float-abi			CDATA			#IMPLIED>
+
+<!-- The definition of a symbol which is passed to the linker using the
+	 -defsym command line option -->
+<!ELEMENT linker-symbol EMPTY>
+<!ATTLIST linker-symbol
+	name				CDATA			#REQUIRED
+	value				CDATA			#REQUIRED>
+
+<!-- The definition of a signature. A signature is valid for an URI and all
+     sub-URIs. It uses a public-key (which is downloaded using gpg -key-recv)
+     and may be contained in a key-ring, which is defined by its URL. The
+     signature file is determined by another extension, that is added to the
+     URL of the signed file.-->
+<!ELEMENT signature EMPTY>
+<!ATTLIST signature
+	uri					CDATA			#REQUIRED
+	public-key			CDATA			#IMPLIED
+	key-ring			CDATA			#IMPLIED
+	extension			CDATA			#REQUIRED>
+
+<!-- The definition of a 3rd party tool. A third party tool is identified by
+	 its name and consists of one or multiple packets. It may be
+	 target-dependent (e.g. the GNU binutils), i.e. for each target platform
+	 the tool has to be recompiled. An optional set of environment variables
+	 may be defined. A list of executables, which are shipped with the tool,
+	 may be defined. If no executables are listed, it is assumed, that a
+	 single executable named after the tool is provided.-->
+<!ELEMENT tool (env*,package+,executable*)>
+<!ATTLIST tool
+	name				ID				#REQUIRED
+	target-dependent	CDATA			#IMPLIED>
+
+<!-- The definition of an executable with its name, which is provided by a
+	 tool. -->
+<!ELEMENT executable EMPTY>
+<!ATTLIST executable
+	name				CDATA			#REQUIRED>
+
+<!-- The definition of a software package, which is downloaded on demand
+	 from a given URL. It may contain sub-packages. -->
+<!ELEMENT package (sub-package*)>
+<!ATTLIST package
+	url					CDATA			#REQUIRED>
+
+<!-- The definition of a software sub-package, which is downloaded on demand
+	 from a given URL into a directory of the unpackaged main-package. It
+	 may contain nested sub-packages. -->
+<!ELEMENT sub-package (sub-package*)>
+<!ATTLIST sub-package
+	url					CDATA			#REQUIRED
+	dir					CDATA			#REQUIRED>
+
+<!-- The definition of an environment variable with its value. -->
+<!ELEMENT env EMPTY>
+<!ATTLIST env
+	variable			CDATA			#REQUIRED
+	value				CDATA			#REQUIRED>
