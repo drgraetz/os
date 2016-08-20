@@ -3,12 +3,14 @@
 
 <build-info>
 
-	<platform name='i386' target-triplet='i386-elf' tune='i386'>
-		<linker-symbol name='bootAddr' value='1G'/>
+	<platform name='i386' target-triplet='i686-elf' tune='i386'>
+		<linker-symbol name='bootAddr' value='0x00100000'/>
+		<linker-symbol name='kernelAddr' value='0xFFE00000'/>
 	</platform>
 	<!-- mfpu=vfp -->
 	<platform name='rpi' target-triplet='arm-elf-eabi' tune='arm1176jzf-s' float-abi='hard'>
-		<linker-symbol name='bootAddr' value='0x8000'/>
+		<linker-symbol name='bootAddr' value='0x00008000'/>
+		<linker-symbol name='kernelAddr' value='0xFFE00000'/>
 	</platform>
 	
 	<signature uri='llvm.org' public-key='02119294' extension='.sig'/>

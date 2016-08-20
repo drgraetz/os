@@ -196,7 +196,9 @@ class _Directory:
     # Returns an absolute path relative to this.
     def rel_path(self, path: str) -> str:
         from os.path import relpath
-        assert(isinstance(path, str))
+        assert(isinstance(path, (str, _Directory)))
+        if isinstance(path, _Directory):
+            path = path.path
         return relpath(path, self.__path)
       
       
@@ -668,156 +670,31 @@ class _CommandLine:
   
   
 ##
-# Link all object files, if they have been changed. For each sub-folder in the
-# architecture dependent "obj" folder, an artifact is created. The result is
-# stored in a architecture dependent sub-folder within the "bin" folder. If the
-# "src" folder contains a linker script for the artifact, it is used. The
-# linker script must have the name link.ld.
-#
-# Examples:
-#
-# input files         | output file       | linker script
-# --------------------|-------------------+-------------------
-# obj/i386/kernel/*.o | bin/i386/kernel   | src/kernel/link.ld
-# obj/rasppi/libc/*.o | bin/rasppi/libc.a | src/libc/link.ld
-#
-# The required binutils are downloaded to "tools/src" and installed to
-# "tools/bin".
-#
-def __link() -> None:
-    
-    def _link_for_platform(platform: _BuildInfo.Platform) -> list:
-        from logging import info
-        result = []
-        linker = platform.get_linker()
-        info("linking for " + platform.name)
-        bin_dir = _Directory.bin.enforce(platform.name)
-        for obj_dir in _Directory.obj.get(platform.name).list_dirs():
-            print(obj_dir.path + " -> " + bin_dir.path)
-    
-    generated_files = _BuildInfo.invokeForAllPlatforms(_link_for_platform)
-    _Directory.bin.erase(generated_files)
-#         for executable in _Directory.obj.get(platform.name).list_dirs():
-#             input_files = [relpath(file, executable.path) for file in executable.get_files([".o"])]
-#             output_file = join(output_dir.path, executable.name)
-#             script = join(_Directory.src.path, executable.name, platform.name + ".ld")
-#             result.append(output_file)
-#             result.append(output_file + ".map")
-#             if not _needs_update(output_file, input_files + [script]):
-#                 continue
-#             command_line = [
-#                 linker,
-#                 "-o", output_file,
-#                 "-M=" + output_file + ".map",
-#                 "--nostdlib",
-#                 "--strip-all"
-#             ] + input_files
-#             if isfile(script):
-#                 command_line += ["-T", script]
-#             _invoke(command_line, executable.path)
-#     _Directory.bin.erase_contents(result)
-#  
-#  
-# # ##
-# # # Test the builds.
-# # @_Target
-# # def __test() -> None:
-# #    """Test the builds."""
-# #    from logging import info
-# #    from os import listdir
-# #    from os.path import join
-# #    __link()
-# #    for platform_name in listdir(_bin_dir):
-# #       info("testing " + platform_name)
-# #       platform = _Platform.get_all()[platform_name]
-# #       command_line = [
-# #          "qemu-system-" + platform.architecture.name,
-# #          "-kernel", join(_bin_dir, platform.name, "kernel"),
-# #          "-serial", "file:" + join(_logs_dir, "test-" + platform.name + ".log"),
-# #          "-initrd", join(_bin_dir, platform.name, "launcher")
-# #       ]
-# #       _invoke(command_line)
- 
- 
-##
-# Compile all source code files. Source code files are located within
-# the "src" folder and have one of the following extensions:
-# - .S for assembler files processed by the c preprocessor
-# - .cpp for C++ files
-def __compile() -> None:    
-    
-    
-    ##
-    # Returns the path of the .o file, that is compiled from a given
-    # source_file on a given platform. Returns None, if
-    # - either the source_file is not compiled for the platform (i.e.
-    #   the file extension does not contain .'platform.name'),
-    # - or the output_file already exists and is newer than the source
-    #   file and all its includes.
-    def _derive_output_file(platform: _BuildInfo.Platform, source_file: str) -> str:
-        from os.path import isfile, splitext
-        rel_path, ext = splitext(_Directory.src.rel_path(source_file))
-        obj_dir = _Directory.obj.enforce(platform.name)
-        output_file = obj_dir.join(rel_path) + ".o"
-        target_platform = splitext(rel_path)[1]
-        if target_platform != "" and target_platform != "." + platform.name:
-            return None
-        if isfile(output_file):
-            includes = platform.read_includes(source_file)
-            if not _needs_update(output_file, includes + [source_file]):
-                return None
-        return output_file
-    
-    
-    ##
-    # Compiles all files for a given platform.
-    def _compile_for_platform(platform: _BuildInfo.Platform) -> list:
-        from logging import info
-        from os.path import dirname
-        compiler = platform.get_compiler()
-        info("compiling for " + platform.name)
-        result = []
-        for source_file in _Directory.src.get_files([".S", ".cpp"]):
-            output_file = _derive_output_file(platform, source_file)
-            if output_file is None:
-                continue
-            _Directory(dirname(output_file)).enforce()
-            command_line = [
-                compiler,
-                "-c", source_file,
-                "-nostdinc",
-                "-o", output_file,
-                "-fno-rtti",
-                "-DVERBOSE",
-            ]
-            if output_file.endswith(".bc"):
-                command_line += ["-emit-llvm"]
-            else:
-                command_line += [
-                    "--target=" + platform.target_triplet,
-                    "-mtune=" + platform.tune
-                ]
-                if platform.float_abi is not None:
-                    command_line += ["-mfloat-abi=" + platform.float_abi]
-            if source_file.endswith(".cpp"):
-                command_line += ["--std=c++11"]
-            for include in platform.include_dirs:
-                command_line += ["-I", include.path]
-            _invoke(command_line)
-            result.append(output_file)
-        return result
-    
-    
-    generated_files = _BuildInfo.invokeForAllPlatforms(_compile_for_platform)
-    _Directory.obj.erase_contents(generated_files)
-
- 
-##
 # The representation of the contents of the build_infox.xml file.
 class _BuildInfo:
     __doc = None
     __platforms = {}
     __signatures = []
+    
+    
+    ##
+    # The definition of a symbol passed to the linker.
+    class LinkerSymbol:
+        
+        
+        def __init__(self, xml):
+            self.__name = xml.get('name')
+            self.__value = xml.get('value')
+        
+        
+        @property
+        def name(self) -> str:
+            return self.__name
+        
+        
+        @property
+        def value(self) -> str:
+            return self.__value
     
     
     ##
@@ -837,6 +714,16 @@ class _BuildInfo:
                  _Directory.src.get(join("ext", "include")),
                  _Directory.src.get(join("include", self.name))
             ])
+            linker_symbols = []
+            _BuildInfo._create("linker-symbol", _BuildInfo.LinkerSymbol, linker_symbols, xml)
+            self.__linker_symbols = _ReadOnlyList(linker_symbols)
+        
+        
+        ##
+        # The linker-symbols defined in buildinfo.xml.
+        @property
+        def linker_symbols(self) -> _ReadOnlyList:
+            return self.__linker_symbols
         
         
         ##
@@ -845,6 +732,13 @@ class _BuildInfo:
         @property
         def target_triplet(self) -> str:
             return self.__target_triplet
+        
+        
+        ##
+        # The platform's architecture (i.e. the first part of the target triplet).
+        @property
+        def architecture(self) -> str:
+            return self.__target_triplet[:self.__target_triplet.index('-')]
         
         
         ##
@@ -1198,7 +1092,11 @@ class _BuildInfo:
         @staticmethod
         def get(name: str, target_triplet: str=None) -> str:
             from os.path import isfile
-            path = _Directory.tool.get("bin").join(name)
+            if target_triplet is None or target_triplet == "":
+                file = name
+            else:
+                file = target_triplet + "-" + name
+            path = _Directory.tool.get("bin").join(file)
             if not isfile(path):
                 _BuildInfo.Tool.__executables[name].build(target_triplet)
             return path
@@ -1250,11 +1148,13 @@ class _BuildInfo:
     # targeted platform as its only parameter. It returns a list of generated
     # files.
     @staticmethod
-    def invokeForAllPlatforms(delegate) -> list:
+    def invokeForAllPlatforms(delegates: list) -> list:
+        assert(isinstance(delegates, list))
         _BuildInfo.__read()
         result = []
-        for platform in _BuildInfo.__platforms.values():
-            result += delegate(platform)
+        for delegate in delegates:
+            for platform in _BuildInfo.__platforms.values():
+                result += delegate(platform)
         return result
     
     
@@ -1331,8 +1231,147 @@ class _BuildInfo:
         raise Exception("No signature definition for " + uri)
 
 
+##
+# Link all object files, if they have been changed. For each sub-folder in the
+# architecture dependent "obj" folder, an artifact is created. The result is
+# stored in a architecture dependent sub-folder within the "bin" folder. If the
+# "src" folder contains a linker script for the artifact, it is used. The
+# linker script must have the name link.ld.
+#
+# Examples:
+#
+# input files         | output file       | linker script
+# --------------------|-------------------+-------------------
+# obj/i386/kernel/*.o | bin/i386/kernel   | src/kernel/link.ld
+# obj/rasppi/libc/*.o | bin/rasppi/libc.a | src/libc/link.ld
+#
+# The required binutils are downloaded to "tools/src" and installed to
+# "tools/bin".
+#
+def __link(platform: _BuildInfo.Platform) -> list:
+    from logging import info
+    from os.path import isfile
+    result = []
+    obj_base_dir = _Directory.obj.get(platform.name)
+    bin_dir = _Directory.bin.enforce(platform.name)
+    linker = platform.get_linker()
+    info("linking for " + platform.name)
+    for obj_dir in obj_base_dir.list_dirs():
+        output_file = bin_dir.get(obj_dir.name).path
+        map_file = output_file + ".map"
+        command_line = [
+            obj_dir.rel_path(linker),
+            "-o", obj_dir.rel_path(output_file),
+            "-M=" + obj_dir.rel_path(map_file),
+            "--nostdlib",
+            "--strip-all"]
+        for linker_symbol in platform.linker_symbols:
+            command_line += ["--defsym", linker_symbol.name + "=" + linker_symbol.value]
+        input_files = [obj_dir.rel_path(file) for file in obj_dir.get_files([".o"])]
+        command_line += input_files
+        script = _Directory.src.get(obj_dir.name).join("link.ld")
+        if isfile(script):
+            command_line += ["-T", obj_dir.rel_path(script)]
+            for line in open(script).readlines():
+                line = line.strip()
+                if line.startswith("INPUT(") and line.endswith(")"):
+                    raise Exception(line + " statement not yet supported")
+        _invoke(command_line, obj_dir)
+        result += [output_file, map_file]
+    return result
+
+
+##
+# Compile all source code files. Source code files are located within
+# the "src" folder and have one of the following extensions:
+# - .S for assembler files processed by the c preprocessor
+# - .cpp for C++ files
+def __compile(platform: _BuildInfo.Platform) -> list:    
+    
+    
+    ##
+    # Returns the path of the .o file, that is compiled from a given
+    # source_file on a given platform. Returns None, if
+    # - either the source_file is not compiled for the platform (i.e.
+    #   the file extension does not contain .'platform.name'),
+    # - or the output_file already exists and is newer than the source
+    #   file and all its includes.
+    def _derive_output_file(platform: _BuildInfo.Platform, source_file: str) -> str:
+        from os.path import splitext
+        rel_path, ext = splitext(_Directory.src.rel_path(source_file))
+        obj_dir = _Directory.obj.enforce(platform.name)
+        target_platform = splitext(rel_path)[1]
+        output_file = obj_dir.join(rel_path) + ".o"
+        if target_platform != "" and target_platform != "." + platform.name:
+            return None
+        return output_file
+    
+    
+    ##
+    # Checks, wether a file needs to be compiled.
+    def _needs_compilation(platform: _BuildInfo.Platform, output_file: str, source_file: str) -> bool:
+        from os.path import dirname, isfile
+        if output_file is None:
+            return False
+        _Directory(dirname(output_file)).enforce()
+        if not isfile(output_file):
+            return True
+        includes = platform.read_includes(source_file)
+        return _needs_update(output_file, includes + [source_file])
+    
+    
+    from logging import info
+    compiler = platform.get_compiler()
+    info("compiling for " + platform.name)
+    result = []
+    for source_file in _Directory.src.get_files([".S", ".cpp"]):
+        output_file = _derive_output_file(platform, source_file)
+        if output_file is not None:
+            result.append(output_file)
+        if not _needs_compilation(platform, output_file, source_file):
+            continue
+        command_line = [
+            compiler,
+            "-c", source_file,
+            "-nostdinc",
+            "-o", output_file,
+            "-fno-rtti",
+            "-DVERBOSE",
+        ]
+        if output_file.endswith(".bc"):
+            command_line += ["-emit-llvm"]
+        else:
+            command_line += [
+                "--target=" + platform.target_triplet,
+                "-mtune=" + platform.tune
+            ]
+            if platform.float_abi is not None:
+                command_line += ["-mfloat-abi=" + platform.float_abi]
+        if source_file.endswith(".cpp"):
+            command_line += ["--std=c++11"]
+        for include in platform.include_dirs:
+            command_line += ["-I", include.path]
+        _invoke(command_line)
+    return result
+
+ 
+##
+# Test the builds.
+def __test(platform: _BuildInfo.Platform) -> None:
+    from logging import info
+    info("testing on " + platform.name)
+    command_line = [
+        "qemu-system-" + platform.architecture,
+        "-kernel", _Directory.bin.get(platform.name).join("kernel"),
+        "-serial", "file:" + _Directory.logs.join("test-" + platform.name + ".log")
+        #"-initrd", join(_bin_dir, platform.name, "launcher")
+    ]
+    _invoke(command_line)
+ 
+ 
 _CommandLine.evaluate()
 __init_logging()
 _Directory.__static_init__()
-__compile()
-__link()
+result = _BuildInfo.invokeForAllPlatforms([__compile, __link, __test])
+_Directory.src.erase_contents(result)
+_Directory.bin.erase_contents(result)

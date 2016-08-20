@@ -2,7 +2,7 @@
 #include <multiboot/multiboot.h>
 #define MULTIBOOT_FLAGS         (MULTIBOOT_PAGE_ALIGN | MULTIBOOT_MEMORY_INFO)
 
-.section .phys
+.section .boot
 /*
  * The MultiBoot header.
  */
@@ -121,6 +121,7 @@ _exception\number:
     .int    0x00088E00
 .endm
 
+/*
 exceptionHandler 0, 0       // Divide by 0
 exceptionHandler 1, 0       // Debugger Exception
 exceptionHandler 2, 0       // Nonmaskable Interrupt
@@ -153,6 +154,7 @@ exceptionHandler 28, 0
 exceptionHandler 29, 0
 exceptionHandler 30, 0
 exceptionHandler 31, 0
+*/
 
 .section .data
 _ZN4i3863IDTE.end:
