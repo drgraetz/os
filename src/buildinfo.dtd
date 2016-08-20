@@ -2,16 +2,21 @@
 <!ELEMENT build-info (platform+,signature*,tool*)>
 
 <!-- The definition of a target platform. A platform is referenced by
-     its _name_. For each platform the target-triplet and the parameters
-     tune and float-abi are defined, which are used to invoke the compiler.
+     its _name_.
+     
+     For each platform, the following must be defined:
+     - compiler parameters
+     - the name of the qemu executable
+     - qemu parameters
      
      Multiple symbols may be defined, which are used to invoke the linker. -->
 <!ELEMENT platform (linker-symbol*)>
 <!ATTLIST platform
 	name				ID				#REQUIRED
 	target-triplet		CDATA			#REQUIRED
-	tune				CDATA			#REQUIRED
-	float-abi			CDATA			#IMPLIED>
+	compiler-params		CDATA			#REQUIRED
+	qemu-params			CDATA			#REQUIRED
+	qemu				CDATA			#REQUIRED>
 
 <!-- The definition of a symbol which is passed to the linker using the
 	 -defsym command line option -->

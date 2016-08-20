@@ -97,6 +97,14 @@ class _Directory:
     
     
     ##
+    # Checks, whether the provided path is either relative to this or absolute
+    # and resides in this.
+    def within(self, path: str) -> bool:
+        from os.path import isabs
+        return not isabs(path) or not self.rel_path(path).startswith("..")
+    
+    
+    ##
     # Enforces the presence of a directory. If not already present, the directory
     # and all required parent directories are created. Raises an exception, in case
     # the directory cannot be created.
@@ -270,6 +278,10 @@ class _ReadOnlyList:
     # Returns an iterator over all elements.
     def __iter__(self):
         return self.__base.__iter__()
+    
+    
+    def __str__(self) -> str:
+        return self.__base.__str__()
      
      
 ##
@@ -706,8 +718,9 @@ class _BuildInfo:
             from os.path import join
             self.__name = xml.get('name')
             self.__target_triplet = xml.get('target-triplet')
-            self.__tune = xml.get('tune')
-            self.__float_abi = xml.get('float-abi')
+            self.__compiler_params = _ReadOnlyList(xml.get('compiler-params').split())
+            self.__qemu_params = _ReadOnlyList(xml.get('qemu-params').split())
+            self.__qemu = xml.get('qemu')
             self.__includes = {}
             self.__include_dirs = _ReadOnlyList([
                  _Directory.src.get("include"),
@@ -742,19 +755,24 @@ class _BuildInfo:
         
         
         ##
-        # The value of gcc's -mtune parameter as defined in the tune
-        # attribute.
+        # The parameters passed to qemu.
         @property
-        def tune(self) -> str:
-            return self.__tune
+        def qemu_params(self) -> list:
+            return list(self.__qemu_params)
         
         
         ##
-        # The value of gcc's -mfloat-abi parameter as defined in the
-        # float-abi attribute 
+        # The parameters passed to the compiler.
         @property
-        def float_abi(self) -> str:
-            return self.__float_abi
+        def compiler_params(self) -> list:
+            return list(self.__compiler_params)
+        
+        
+        ##
+        # The name of the qemu executable.
+        @property
+        def qemu(self) -> str:
+            return self.__qemu
         
         
         ##
@@ -917,16 +935,9 @@ class _BuildInfo:
                 if exists(output_dir.join(file.name)):
                     continue
                 tar.extract(file, output_dir.path)
-            roots = []
-            for file in files:
-                try:
-                    root = file[:file.index(sep)]
-                except ValueError:
-                    root = file
-                if root not in roots:
-                    roots.append(root)
+            roots = _create_tree_from_paths(files)
             if len(roots) == 1:
-                root = output_dir.get(roots[0])
+                root = output_dir.get(roots.keys()[0])
                 for file in root.list_contents():
                     rename(file, output_dir.join(root.rel_path(file)))
                 root.erase_contents([], True)
@@ -1154,7 +1165,9 @@ class _BuildInfo:
         result = []
         for delegate in delegates:
             for platform in _BuildInfo.__platforms.values():
-                result += delegate(platform)
+                files = delegate(platform, _ReadOnlyList(result))
+                if files is not None:
+                    result += files
         return result
     
     
@@ -1248,35 +1261,36 @@ class _BuildInfo:
 # The required binutils are downloaded to "tools/src" and installed to
 # "tools/bin".
 #
-def __link(platform: _BuildInfo.Platform) -> list:
+def __link(platform: _BuildInfo.Platform, generated_files: _ReadOnlyList) -> list:
     from logging import info
     from os.path import isfile
     result = []
-    obj_base_dir = _Directory.obj.get(platform.name)
+    obj_dir = _Directory.obj.get(platform.name)
     bin_dir = _Directory.bin.enforce(platform.name)
     linker = platform.get_linker()
     info("linking for " + platform.name)
-    for obj_dir in obj_base_dir.list_dirs():
-        output_file = bin_dir.get(obj_dir.name).path
+    obj_files = _create_tree_from_paths([obj_dir.rel_path(file) for file in generated_files if obj_dir.within(file)])
+    for name in obj_files.keys():
+        dir = obj_dir.get(name)
+        output_file = bin_dir.join(name)
         map_file = output_file + ".map"
         command_line = [
-            obj_dir.rel_path(linker),
-            "-o", obj_dir.rel_path(output_file),
-            "-M=" + obj_dir.rel_path(map_file),
+            dir.rel_path(linker),
+            "-o", dir.rel_path(output_file),
+            "-M=" + dir.rel_path(map_file),
             "--nostdlib",
             "--strip-all"]
         for linker_symbol in platform.linker_symbols:
             command_line += ["--defsym", linker_symbol.name + "=" + linker_symbol.value]
-        input_files = [obj_dir.rel_path(file) for file in obj_dir.get_files([".o"])]
-        command_line += input_files
-        script = _Directory.src.get(obj_dir.name).join("link.ld")
+        command_line += _get_paths_from_tree(obj_files[name])
+        script = _Directory.src.get(name).join("link.ld")
         if isfile(script):
-            command_line += ["-T", obj_dir.rel_path(script)]
+            command_line += ["-T", dir.rel_path(script)]
             for line in open(script).readlines():
                 line = line.strip()
                 if line.startswith("INPUT(") and line.endswith(")"):
                     raise Exception(line + " statement not yet supported")
-        _invoke(command_line, obj_dir)
+        _invoke(command_line, dir)
         result += [output_file, map_file]
     return result
 
@@ -1286,7 +1300,7 @@ def __link(platform: _BuildInfo.Platform) -> list:
 # the "src" folder and have one of the following extensions:
 # - .S for assembler files processed by the c preprocessor
 # - .cpp for C++ files
-def __compile(platform: _BuildInfo.Platform) -> list:    
+def __compile(platform: _BuildInfo.Platform, generated_files: _ReadOnlyList) -> list:
     
     
     ##
@@ -1341,12 +1355,7 @@ def __compile(platform: _BuildInfo.Platform) -> list:
         if output_file.endswith(".bc"):
             command_line += ["-emit-llvm"]
         else:
-            command_line += [
-                "--target=" + platform.target_triplet,
-                "-mtune=" + platform.tune
-            ]
-            if platform.float_abi is not None:
-                command_line += ["-mfloat-abi=" + platform.float_abi]
+            command_line += ["--target=" + platform.target_triplet] + platform.compiler_params
         if source_file.endswith(".cpp"):
             command_line += ["--std=c++11"]
         for include in platform.include_dirs:
@@ -1357,21 +1366,61 @@ def __compile(platform: _BuildInfo.Platform) -> list:
  
 ##
 # Test the builds.
-def __test(platform: _BuildInfo.Platform) -> None:
+def __test(platform: _BuildInfo.Platform, generated_files: _ReadOnlyList) -> None:
     from logging import info
     info("testing on " + platform.name)
     command_line = [
-        "qemu-system-" + platform.architecture,
-        "-kernel", _Directory.bin.get(platform.name).join("kernel"),
-        "-serial", "file:" + _Directory.logs.join("test-" + platform.name + ".log")
+        platform.qemu,
+        "-kernel", _Directory.logs.rel_path(_Directory.bin.get(platform.name).join("kernel")),
+        #"-serial", "file: test-" + platform.name + ".log"
         #"-initrd", join(_bin_dir, platform.name, "launcher")
-    ]
-    _invoke(command_line)
- 
- 
+    ] + platform.qemu_params
+    _invoke(command_line, _Directory.logs)
+
+
+##
+# Forms a directory tree from a list of paths.
+def _create_tree_from_paths(paths: list) -> dict:
+    from os import sep 
+    result = {}
+    for path in paths:
+        current = result
+        while path != "":
+            try:
+                pos = path.index(sep)
+                name = path[:pos]
+                path = path[pos+1:]
+            except ValueError:
+                name = path
+                path = ""
+            if name not in current:
+                current.update({name: {}})
+            current = current[name]
+    return result
+
+
+def _get_paths_from_tree(tree: dict) -> list:
+    
+    
+    def _append(result: list, current: dict, prefix: str) -> None:
+        from os.path import join
+        for name in sorted(current.keys()):
+            if prefix is None:
+                path = name
+            else:
+                path = join(prefix, name)
+            result.append(path)
+            _append(result, current[name], path)
+    
+    
+    result = []
+    _append(result, tree, None)
+    return result
+
+
 _CommandLine.evaluate()
 __init_logging()
 _Directory.__static_init__()
 result = _BuildInfo.invokeForAllPlatforms([__compile, __link, __test])
-_Directory.src.erase_contents(result)
+_Directory.obj.erase_contents(result)
 _Directory.bin.erase_contents(result)

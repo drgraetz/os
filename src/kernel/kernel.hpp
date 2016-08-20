@@ -89,19 +89,19 @@ struct boot_data_s;
 //
 //void* memset(void* ptr, int value, size_t byteCount);
 //
-//#ifdef VERBOSE
-//int printf(const char*, ...);
+#ifdef VERBOSE
+int printf(const char*, ...);
 //int putchar(int);
 //#define assert(expression, ...) {   \
 //    if (!(expression)) {            \
 //        printf(__VA_ARGS__);        \
 //        halt();                     \
 //    } }
-//#else
+#else
 #define putchar(int)                    {}
 #define printf(...)                     {}
 #define assert(expression, ...)         {}
-//#endif
+#endif
 //
 ///**
 // * The definition of OS error codes. For a list of the error codes for the most

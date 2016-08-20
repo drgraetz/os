@@ -1,15 +1,17 @@
 #include "kernel.hpp"
-//#include <stdarg.h>
-//
-///**
-// * @file
-// *
-// * Holds the kernel's main function.
-// */
-//
+
+/**
+ * @file
+ *
+ * Holds the kernel's main function.
+ */
+
 //void* operator new (unsigned int size, void* ptr) noexcept;
 //
-//#ifdef VERBOSE
+#ifdef VERBOSE
+
+#include <stdarg.h>
+
 //int putchar(int value) {
 //    if ((value < 32 || value > 127) && value != '\r' && value != '\n' &&
 //        value != '\t') {
@@ -67,7 +69,7 @@
 //char CODE;
 //char PHYS;
 //
-//int vprintf(const char* format, va_list arg) {
+int vprintf(const char* format, va_list arg) {
 //    if (format == nullptr) {
 //        return -1;
 //    }
@@ -75,7 +77,7 @@
 //    if (format >= &CODE) {
 //        format -= delta;
 //    }
-//    int result = 0;
+    int result = 0;
 //    char leadingChar;
 //    int digits;
 //    const char* string;
@@ -156,18 +158,18 @@
 //            putchar(*string);
 //        }
 //    }
-//    return result;
-//}
-//
-//int printf(const char* format, ...) {
-//    va_list arg;
-//    va_start(arg, format);
-//    int result = vprintf(format, arg);
-//    va_end(arg);
-//    return result;
-//}
-//
-//#endif
+    return result;
+}
+
+int printf(const char* format, ...) {
+    va_list arg;
+    va_start(arg, format);
+    int result = vprintf(format, arg);
+    va_end(arg);
+    return result;
+}
+
+#endif
 //
 //errno_e errno = ESUCCESS;
 //
@@ -199,7 +201,7 @@
 
 void kmain(struct boot_data_s* data) {
 //    initModules();
-//    printf("Hello from the kernel.\r\n");
+    printf("Hello from the kernel.\r\n");
 //    void* ebp;
 //    void* esp;
 //    void* eip;

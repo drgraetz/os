@@ -2,9 +2,9 @@
 .globl _start
 _start:
 .size _start, . - _start
-
-
-    # Loop over this forevermore
+	// initialize stack
+	mov		sp, #0x8000
+    // loop infinetly
 .globl halt
 halt:
     b       halt

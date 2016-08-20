@@ -3,12 +3,16 @@
 
 <build-info>
 
-	<platform name='i386' target-triplet='i686-elf' tune='i386'>
+	<platform name='i386' target-triplet='i686-elf'
+		compiler-params='-mtune=i386'
+		qemu='qemu-system-i386' qemu-params=''>
 		<linker-symbol name='bootAddr' value='0x00100000'/>
 		<linker-symbol name='kernelAddr' value='0xFFE00000'/>
 	</platform>
 	<!-- mfpu=vfp -->
-	<platform name='rpi' target-triplet='arm-elf-eabi' tune='arm1176jzf-s' float-abi='hard'>
+	<platform name='rpi' target-triplet='arm-elf-eabi'
+		compiler-params='-mtune=arm1176jzf-s -mfloat-abi=hard'
+		qemu='qemu-system-arm' qemu-params='-M versatilepb -cpu arm1176 -m 256'>
 		<linker-symbol name='bootAddr' value='0x00008000'/>
 		<linker-symbol name='kernelAddr' value='0xFFE00000'/>
 	</platform>
