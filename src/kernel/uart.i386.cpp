@@ -9,12 +9,6 @@ namespace uart {
 #define BASEPORT        0x3F8
 
 void writeByte(unsigned int port, uint8_t value) {
-//    print('>');
-//    print(' ');
-//    printHex(basePort + port);
-//    print(',');
-//    printHex(value);
-//    newLine();
     asm(
         "outb   %%al, %%dx" : :
         "d"(BASEPORT + port), "a"(value)
@@ -22,12 +16,6 @@ void writeByte(unsigned int port, uint8_t value) {
 }
 
 void writeWord(unsigned int port, uint16_t value) {
-//    print('>');
-//    print(' ');
-//    printHex(basePort + port);
-//    print(',');
-//    printHex(value);
-//    newLine();
     asm(
         "outw   %%ax, %%dx" : :
         "d"(BASEPORT + port), "a"(value)
