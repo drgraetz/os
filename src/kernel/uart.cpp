@@ -351,4 +351,11 @@ int printf(const char* format, ...) {
 
 #else
 
+namespace uart {
+
+void init() {
+}
+
+}
+
 #endif
