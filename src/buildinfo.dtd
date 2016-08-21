@@ -8,15 +8,18 @@
      - compiler parameters
      - the name of the qemu executable
      - qemu parameters
+     - the cpu on which it is run as it is passed as -mcpu parameter to the
+       assembler and as -mtune parameter to the compiler
      
      Multiple symbols may be defined, which are used to invoke the linker. -->
 <!ELEMENT platform (linker-symbol*)>
 <!ATTLIST platform
-	name				ID				#REQUIRED
-	target-triplet		CDATA			#REQUIRED
-	compiler-params		CDATA			#REQUIRED
-	qemu-params			CDATA			#REQUIRED
-	qemu				CDATA			#REQUIRED>
+    name                ID              #REQUIRED
+    target-triplet      CDATA           #REQUIRED
+    compiler-params     CDATA           #REQUIRED
+    qemu-params         CDATA           #REQUIRED
+    qemu                CDATA           #REQUIRED
+    cpu                 CDATA           #REQUIRED>
 
 <!-- The definition of a symbol which is passed to the linker using the
 	 -defsym command line option -->

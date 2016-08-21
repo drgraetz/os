@@ -181,13 +181,15 @@
  */
 
 namespace uart {
-void writeByte(unsigned int port, uint8_t value);
-void writeWord(unsigned int port, uint16_t value);
-uint8_t readByte(unsigned int port);
 
-bool isReadyToSend() {
-    return readByte(5) & 0x20;
-}
+/**
+ * Sends a single byte.
+ */
+void send(char value);
+/**
+ * Checks, whether the UART is ready for the next character to be sent.
+ */
+bool isReadyToSend();
 
 }
 
@@ -198,105 +200,55 @@ int putchar(int value) {
         value = 127;
     }
     while (!isReadyToSend()) ;
-    writeByte(0, value);
+    send((char)value);
     return value;
 }
 
-void initUart() {
-    using namespace uart;
-    // 8 bits, no parity, 1 stop bit, access divisor latch
-    writeByte(3, 0x83);
-    // speed 9600 baud
-    uint16_t divisor = (uint16_t)(115200 / 9600);
-    writeWord(0, divisor);
-    // 8 bits, no parity, 1 stop bit
-    writeByte(3, 0x03);
-    // disable all interrupts
-    writeByte(1, 0x00);
-    // enable 14 bytes FIFO, DMA mode 0, clear both FIFO queues
-    writeByte(2, 0xC7);
-    // auxiliary output 2, request to send, data terminal ready
-    writeByte(4, 0x0B);
-}
-
-uint16_t* videoPtr = (uint16_t*)0x000B8000;
-
-void print(char c) {
-    uint16_t** videoPtrAddr = &videoPtr;
-    if (!AddressSpace::isPagingEnabled()) {
-        videoPtrAddr = AddressSpace::getPhysicalAddress(videoPtrAddr);
+/**
+ * Convert an integer number to an 0 terminated ASCII string. If the buffer is
+ * not long enough to hold the number, the output is truncated
+ * at the buffers end.
+ *
+ * \return The number of characters written.
+*/
+uint32_t __itoan(
+    char* buffer,           /**< [out]  The buffer, to which the string is
+                                        written */
+    size_t bufferLength,    /**< [in]   The length of the buffer in bytes */
+    int radix,              /**< [in]   The radix of the number system, in
+                                        which the number is written */
+    unsigned int value,     /**< [in]   The number to be written */
+    bool upperCase          /**< [in]   Defines, wether upper (true) or lower
+                                        case letters are used for digits
+                                        greater than 0 */
+) {
+    if (buffer == 0 || bufferLength <= 0) {
+        return 0;
     }
-    **videoPtrAddr = (uint16_t)(0x4F00 | (c & 0xFF));
-    *videoPtrAddr = *videoPtrAddr + 1;
-}
-
-void newLine() {
-    uint16_t** videoPtrAddr = &videoPtr;
-    if (!AddressSpace::isPagingEnabled()) {
-        videoPtrAddr = AddressSpace::getPhysicalAddress(videoPtrAddr);
-    }
-    *videoPtrAddr = *videoPtrAddr + 80 - (*videoPtrAddr - (uint16_t*)0xB8000) % 80;
-}
-
-void printHex(int v) {
-    for (int i = 28; i >= 0; i -= 4) {
-        int current = (v >> i) & 15;
-        if (current >= 10) {
-            print('A' + current - 10);
-        } else {
-            print('0' + current);
+    int i = 0;
+    char digit10 = upperCase ? 'A' : 'a';
+    if (bufferLength > 1 && radix > 0 && radix <= 36) {
+        for (i = 0; i < bufferLength - 1 && (value != 0 || i == 0); i++) {
+            unsigned int newValue = value / radix;
+            char digit = (char)(value - newValue * radix);
+            if (digit < 10) {
+                digit += '0';
+            } else {
+                digit += digit10 - 10;
+            }
+            buffer[i] = digit;
+            value = newValue;
         }
     }
+    buffer[i] = '\0';
+    for (char* buffer2 = buffer + i - 1; buffer < buffer2; buffer++, buffer2--) {
+        char temp = *buffer2;
+        *buffer2 = *buffer;
+        *buffer = temp;
+    }
+    return i;
 }
 
-///**
-// * Convert an integer number to an 0 terminated ASCII string. If the buffer is
-// * not long enough to hold the number, the output is truncated
-// * at the buffers end.
-// *
-// * \return The number of characters written.
-//*/
-//uint32_t __itoan(
-//    char* buffer,           /**< [out]  The buffer, to which the string is
-//                                        written */
-//    uint32_t bufferLength,  /**< [in]   The length of the buffer in bytes */
-//    uint32_t radix,         /**< [in]   The radix of the number system, in
-//                                        which the number is written */
-//    uint32_t value,         /**< [in]   The number to be written */
-//    bool upperCase          /**< [in]   Defines, wether upper (true) or lower
-//                                        case letters are used for digits
-//                                        greater than 0 */
-//) {
-//    if (buffer == 0 || bufferLength <= 0) {
-//        return 0;
-//    }
-//    int i = 0;
-//    char digit10 = upperCase ? 'A' : 'a';
-//    if (bufferLength > 1 && radix > 0 && radix <= 36) {
-//        for (i = 0; i < bufferLength - 1 && (value != 0 || i == 0); i++) {
-//            unsigned int newValue = value / radix;
-//            char digit = (char)(value - newValue * radix);
-//            if (digit < 10) {
-//                digit += '0';
-//            } else {
-//                digit += digit10 - 10;
-//            }
-//            buffer[i] = digit;
-//            value = newValue;
-//        }
-//    }
-//    buffer[i] = '\0';
-//    for (char* buffer2 = buffer + i - 1; buffer < buffer2; buffer++, buffer2--) {
-//        char temp = *buffer2;
-//        *buffer2 = *buffer;
-//        *buffer = temp;
-//    }
-//    return i;
-//}
-//
-//char CODE;
-//char PHYS;
-//
 int vprintf(const char* format, va_list arg) {
     if (format == nullptr || !valid(format)) {
         return -1;
@@ -306,10 +258,10 @@ int vprintf(const char* format, va_list arg) {
         format = AddressSpace::getPhysicalAddress(format);
     }
     int result = 0;
-//    char leadingChar;
-//    int digits;
-//    const char* string;
-//    char buffer[33];
+    char leadingChar;
+    int digits;
+    const char* string;
+    char buffer[33];
     for (char c; (c = *format++) != 0; ) {
         if (c != '%') {
             putchar(c);
@@ -360,31 +312,31 @@ int vprintf(const char* format, va_list arg) {
 //        case 's':
 //            string = va_arg(arg, const char*);
 //            break;
-//        case 'p':
-//        case 'P':
-//            __itoan(buffer, sizeof(buffer), 16, va_arg(arg, unsigned int),
-//                c == 'P');
-//            leadingChar = '0';
-//            digits = 8;
-//            string = buffer;
-//            break;
+        case 'p':
+        case 'P':
+            __itoan(buffer, sizeof(buffer), 16, va_arg(arg, unsigned int),
+                c == 'P');
+            leadingChar = '0';
+            digits = 8;
+            string = buffer;
+            break;
         default:
             putchar(c);
             continue;
         }
-//        if (string >= &CODE) {
-//            string -= delta;
-//        }
-//        ssize_t len = 0;
-//        for (const char* tmp = string; *tmp != 0; tmp++) {
-//            len++;
-//        }
-//        for (ssize_t count = digits - len; count > 0; count--) {
-//            putchar(leadingChar);
-//        }
-//        for (; *string != 0; string++) {
-//            putchar(*string);
-//        }
+        if (adjustAddresses) {
+            string = AddressSpace::getPhysicalAddress(string);
+        }
+        ssize_t len = 0;
+        for (const char* tmp = string; *tmp != 0; tmp++) {
+            len++;
+        }
+        for (ssize_t count = digits - len; count > 0; count--) {
+            putchar(leadingChar);
+        }
+        for (; *string != 0; string++) {
+            putchar(*string);
+        }
     }
     return result;
 }

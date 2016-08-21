@@ -41,10 +41,9 @@ template <class C> C* getKernelPtr(const C* value) {
 //}
 
 void kmain(struct boot_data_s& data) {
-    initUart();
+    uart::init();
 //    initModules();
-    //write(AddressSpace::getPhysicalAddress("tty::tty0()\r\n"), 13);
-    printf("Hello from the kernel.\r\n");
+    printf("kmain(%p)\r\n", &data);
 //    void* ebp;
 //    void* esp;
 //    void* eip;

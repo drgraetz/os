@@ -3,18 +3,20 @@
 
 <build-info>
 
-	<platform name='i386' target-triplet='i686-elf'
-		compiler-params='-mtune=i386'
+    
+	<platform name='i386' target-triplet='i686-elf' cpu='i386'
+		compiler-params=''
 		qemu='qemu-system-i386' qemu-params=''>
 		<linker-symbol name='bootAddr' value='0x00100000'/>
 		<linker-symbol name='kernelAddr' value='0xFFE00000'/>
 	</platform>
+	
 	<!-- mfpu=vfp -->
-	<platform name='rpi' target-triplet='arm-elf-eabi'
-		compiler-params='-mtune=arm1176jzf-s -mfloat-abi=hard'
-		qemu='qemu-system-arm' qemu-params='-M versatilepb -cpu arm1176 -m 256'>
+	<platform name='rpi' target-triplet='arm-elf-eabi' cpu='arm1176jzf-s'
+		compiler-params='-mfloat-abi=hard'
+		qemu='qemu-system-arm' qemu-params='-M raspi -cpu arm1176 -m 256'>
 		<linker-symbol name='bootAddr' value='0x00008000'/>
-		<linker-symbol name='kernelAddr' value='0xFFF08000'/>
+		<linker-symbol name='kernelAddr' value='0x00008000'/>
 	</platform>
 	
 	<signature uri='llvm.org' public-key='02119294' extension='.sig'/>

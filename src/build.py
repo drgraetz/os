@@ -623,6 +623,7 @@ class _CommandLine:
     max_line_width = 79
     use_color = True
     rebuild = False
+    createAssemblerFiles = False
      
     @staticmethod
     def evaluate() -> None:
@@ -641,6 +642,8 @@ class _CommandLine:
                     i += 1
                 elif current == "--rebuild":
                     _CommandLine.rebuild = True
+                elif current == "--asm":
+                    _CommandLine.createAssemblerFiles = True
                 else:
                     raise ValueError("Invalid command line option.")
             except Exception as e:
@@ -661,6 +664,7 @@ class _CommandLine:
         print("--no-color            don't use ANSI colors for output")
         print("--max-line-width x    print a maximum of x characters per line (default value: 79)")
         print("--rebuild             rebuild all binaries rather than an incremental build")
+        print("--asm                 create intermediate assembler files")
         exit()
       
       
@@ -721,6 +725,7 @@ class _BuildInfo:
             self.__compiler_params = _ReadOnlyList(xml.get('compiler-params').split())
             self.__qemu_params = _ReadOnlyList(xml.get('qemu-params').split())
             self.__qemu = xml.get('qemu')
+            self.__cpu = xml.get('cpu')
             self.__includes = {}
             self.__include_dirs = _ReadOnlyList([
                  _Directory.src.get("include"),
@@ -730,6 +735,13 @@ class _BuildInfo:
             linker_symbols = []
             _BuildInfo._create("linker-symbol", _BuildInfo.LinkerSymbol, linker_symbols, xml)
             self.__linker_symbols = _ReadOnlyList(linker_symbols)
+        
+        
+        ##
+        # The CPU used for this.
+        @property
+        def cpu(self) -> str:
+            return self.__cpu
         
         
         ##
@@ -850,6 +862,16 @@ class _BuildInfo:
         # If the build fails, all logs are copied into the "logs" directory.
         def get_compiler(self) -> str:
             return _BuildInfo.Tool.get("clang")
+        
+        
+        ##
+        # Returns the path to the assembler for this architecture. If the
+        # assembler is not installed, its sources are downloaded and it is
+        # build.
+        #
+        # If the build fails, all logs are copied into the "logs" directory.
+        def get_assembler(self) -> str:
+            return _BuildInfo.Tool.get("as", self.__target_triplet)
     
     
     ##
@@ -1282,7 +1304,8 @@ def __link(platform: _BuildInfo.Platform, generated_files: _ReadOnlyList) -> lis
             "--strip-all"]
         for linker_symbol in platform.linker_symbols:
             command_line += ["--defsym", linker_symbol.name + "=" + linker_symbol.value]
-        command_line += _get_paths_from_tree(obj_files[name])
+        paths = _get_paths_from_tree(obj_files[name])
+        command_line += [file for file in paths if file.endswith(".o")]
         script = _Directory.src.get(name).join("link.ld")
         if isfile(script):
             command_line += ["-T", dir.rel_path(script)]
@@ -1335,33 +1358,54 @@ def __compile(platform: _BuildInfo.Platform, generated_files: _ReadOnlyList) -> 
     
     
     from logging import info
+    from os.path import splitext
     compiler = platform.get_compiler()
+    assembler = platform.get_assembler()
     info("compiling for " + platform.name)
     result = []
-    for source_file in _Directory.src.get_files([".S", ".cpp"]):
+    for source_file in _Directory.src.get_files([".cpp", ".S"]):
         output_file = _derive_output_file(platform, source_file)
-        if output_file is not None:
-            result.append(output_file)
+        result += [output_file]
         if not _needs_compilation(platform, output_file, source_file):
             continue
         command_line = [
             compiler,
             "-c", source_file,
             "-nostdinc",
-            "-o", output_file,
             "-fno-rtti",
             "-DVERBOSE",
+            "-mtune=" + platform.cpu
         ]
         if output_file.endswith(".bc"):
             command_line += ["-emit-llvm"]
         else:
             command_line += ["--target=" + platform.target_triplet] + platform.compiler_params
-        if source_file.endswith(".cpp"):
+        ext = splitext(source_file)[1]
+        if ext == ".cpp":
             command_line += ["--std=c++11"]
         for include in platform.include_dirs:
             command_line += ["-I", include.path]
+        if ext == ".S" or _CommandLine.createAssemblerFiles:
+            assembler_file = splitext(output_file)[0] + ".s"
+            result += [assembler_file]
+            command_line += ["-o", assembler_file]
+        else:
+            command_line += ["-o", output_file]
+        if ext == ".S":
+            command_line += ["-E"]
+        if _CommandLine.createAssemblerFiles and ext != ".S":
+            command_line += ["-S"]
         _invoke(command_line)
-    return result
+        if ext == ".S" or _CommandLine.createAssemblerFiles:
+            command_line = [
+                assembler,
+                assembler_file,
+                "-o", output_file,
+            ]
+            if platform.architecture != "i686":
+                command_line += ["-mcpu=" + platform.cpu]
+            _invoke(command_line)
+    return [element for element in result if element is not None]
 
  
 ##

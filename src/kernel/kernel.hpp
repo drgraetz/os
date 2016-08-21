@@ -98,14 +98,23 @@ typedef enum {
  */
 extern errno_e errno;
 
+/**
+ * Contains the code for controlling the UART chip. The UART chip is used for
+ * debug messages, if compiled with the VERBOSE symbol.
+ */
+namespace uart {
+/**
+ * Initializes the UART chip for serial I/O.
+ */
+void init();
+}
+
 #ifdef VERBOSE
 
-void initUart();
 int printf(const char*, ...);
 
 #else
 
-#define initUart()                      {}
 #define printf(...)                     {}
 #define assert(expression, ...)         {}
 
@@ -342,9 +351,9 @@ extern "C" void halt() __attribute__((noreturn));
  * The kerneml's main function.
  */
 extern "C" void kmain(
-	struct boot_data_s& data	///< Pointer to an architecture specific data
-								///< structure, which is passed by the boot
-								///< loader.
+    struct boot_data_s& data    ///< Pointer to an architecture specific data
+                                ///< structure, which is passed by the boot
+                                ///< loader.
 ) __attribute__((noreturn));
 
 #endif
