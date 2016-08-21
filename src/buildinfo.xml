@@ -14,7 +14,7 @@
 		compiler-params='-mtune=arm1176jzf-s -mfloat-abi=hard'
 		qemu='qemu-system-arm' qemu-params='-M versatilepb -cpu arm1176 -m 256'>
 		<linker-symbol name='bootAddr' value='0x00008000'/>
-		<linker-symbol name='kernelAddr' value='0xFFE00000'/>
+		<linker-symbol name='kernelAddr' value='0xFFF08000'/>
 	</platform>
 	
 	<signature uri='llvm.org' public-key='02119294' extension='.sig'/>

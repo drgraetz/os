@@ -9,6 +9,17 @@
  * @author Dr. Florian Manfred Grätz
  */
 
+/**
+ * The first byte of the kernel in the virtual memory. The address is
+ * defined in buildinfo.xml.
+ */
+extern const char kernelAddr;
+/**
+ * The first byte of the kernel in the physical memory. The address is
+ * defined in buildinfo.xml.
+ */
+extern const char bootAddr;
+
 ///**
 // * Truncates an address to the start of the corresponding memory page. The
 // * result is uint32_t and therefore must be casted into a pointer type in most
@@ -808,13 +819,22 @@
 //        "movl   %%eax, %%cr3;" : :
 //        "a"(getPhysicalAddress(this)));
 //}
-//
-//#ifdef VERBOSE
-//bool AddressSpace::isPagingEnabled() {
-//    uint32_t result;
-//    asm(
-//        "movl   %%cr0, %%eax;" :
-//        "=a"(result) : );
-//    return (result & 0x80000000) != 0;
-//}
-//#endif
+
+void* AddressSpace::getPhysicalAddressImpl(const void* virtAddr) {
+	if (virtAddr >= &kernelAddr) {
+		size_t delta = &kernelAddr - &bootAddr;
+		return (void*)((const char*)virtAddr - delta);
+	}
+	if (!isPagingEnabled()) {
+		return (void*)virtAddr;
+	}
+	return invalidPtr<void>();
+}
+
+bool AddressSpace::isPagingEnabled() {
+    uint32_t result;
+    asm(
+        "movl   %%cr0, %%eax;" :
+        "=a"(result) : );
+    return (result & 0x80000000) != 0;
+}

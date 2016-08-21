@@ -9,18 +9,16 @@ SECTIONS {
         /* boot code */
         *(.boot)
         /* all other code */
-        *(.text)
+        *(.text*)
         /* GCC exception handler */
         *(.eh_frame)
     }
     /* uninitialized data, e.g. stack, uninitialized variables */
     .bss ALIGN(4K) : AT(ADDR(.bss) - KERNEL_OFFSET) {
-        /*boot.*.o(.bss)*/
         *(.bss)
     }
     /* initialized, writable data */
     .data : AT(ADDR(.data) - KERNEL_OFFSET) {
-    	/*boot.*.o(.data)*/
         *(.data)
     }
     /* readonly data */

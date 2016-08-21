@@ -50,8 +50,3 @@ extern "C" void handleException(
     printf("esp=%08x ebp=%08x esi=%08x edi=%08x\r\n", esp, ebp, esi, edi);
     halt();
 }
-
-extern "C" void __cxa_pure_virtual() {
-    printf("Pure virtual function called.\r\n");
-    halt();
-}

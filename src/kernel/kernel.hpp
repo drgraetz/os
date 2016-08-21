@@ -14,19 +14,12 @@ struct boot_data_s;
 // * dependend header file.
 // */
 //#define MEMPAGE_SIZE
-//
-///**
-// * @file
-// * The symbol definitions for the kernel.
-// */
-//
-//
-// /**
-//  * The definition of an invalid pointer. Note, that nullptr is a valid
-//  * pointer to the start of the physical memory.
-//  */
-//#define INVALID_PTR         ((void*)(-1))
-//
+
+/**
+ * @file
+ * The symbol definitions for the kernel.
+ */
+
 ///**
 // * Yields to the lesser of two values.
 // */
@@ -37,156 +30,102 @@ struct boot_data_s;
 //#define ARRAYSIZE(a)        (sizeof(a) / sizeof((a)[0]))
 //
 ////extern "C" void* memcpy(void*, const void*, size_t);
-//
-///**
-// * The interface for streaming data. This corresponds to a posix file handle.
-// */
-//class Stream {
-//public:
-//    /**
-//     * The implementation of a posix lseek command. The whence parameter is
-//     * set to SEEK_SET.
-//     */
-//    virtual off_t seek(off_t offset) = 0;
-//    /**
-//     * The implimentation of a posix write command.
-//     *
-//     * For the posix specification of the write function, refer to
-//     * <http://pubs.opengroup.org/onlinepubs/009695399/functions/write.html>
-//     */
-//    virtual ssize_t write(const void* buf, size_t nbyte) = 0;
-//    /**
-//     * The implementation of a posix write command.
-//     *
-//     * For the posix specification of the write function, refer to
-//     * <http://pubs.opengroup.org/onlinepubs/009695399/functions/read.html>
-//     */
-//    virtual ssize_t read(void* buf, size_t nbyte) = 0;
-//};
-//
-///**
-// * A stream writing to / reading from a memory area.
-// */
-//class MemoryStream : public Stream {
-//private:
-//    char* start;
-//    char* end;
-//    char* current;
-//public:
-//    /**
-//     * Creates a new instance working on a buffer.
-//     */
-//    MemoryStream(
-//        void* buffer,   ///< The buffer to work on.
-//        size_t size,    ///< The size of the buffer in bytes.
-//        size_t pos      ///< The position in the buffer for the next read/write
-//                        ///< operation.
-//    );
-//    virtual off_t seek(off_t offset);
-//    virtual ssize_t write(const void* buf, size_t nbyte);
-//    virtual ssize_t read(void* buf, size_t nbyte);
-//};
-//
-//void* memset(void* ptr, int value, size_t byteCount);
-//
-#ifdef VERBOSE
-int printf(const char*, ...);
-//int putchar(int);
-//#define assert(expression, ...) {   \
-//    if (!(expression)) {            \
-//        printf(__VA_ARGS__);        \
-//        halt();                     \
-//    } }
-#else
-#define putchar(int)                    {}
-#define printf(...)                     {}
-#define assert(expression, ...)         {}
-#endif
-//
-///**
-// * The definition of OS error codes. For a list of the error codes for the most
-// * common platforms, refer to <http://www.ioplex.com/~miallen/errcmp.html>
-// */
-//typedef enum {
-//    ESUCCESS=0,     ///< Operation completed successfully.
-//    EPERM=1,        ///< Operation not permitted.
-//    ENOENT=2,       ///< No such file or directory.
-//    ESRCH=3,        ///< No such process.
-//    EINTR=4,        ///< Interrupted system call.
-//    EIO=5,          ///< I/O error.
-//    ENXIO =6,       ///< No such device or address.
-//    E2BIG =7,       ///< Argument list too long.
-//    ENOEXEC=8,      ///< Exec format error.
-//    EBADF=9,        ///< Bad file number.
-//    ECHILD=10,      ///< No child process.
-//    EGAIN =11,      ///< Try again.
-//    ENOMEM=12,      ///< Not enough space.
-//    EACCESS=13,     ///< Permission denied.
-//    EFAULT=14,      ///< Bad address.
-//    ENOTBLK=15,     ///< Block device required.
-//    EBUSY =16,      ///< Device or resource busy.
-//    EEXIST=17,      ///< File exists.
-//    EXDEV =18,      ///< Cross-device link.
-//    ENODEV=19,      ///< No such device.
-//    ENOTDIR=20,     ///< Not a directory.
-//    EISDIR=21,      ///< Is a directory.
-//    EINVAL=22,      ///< Invalid argument.
-//    ENFILE=23,      ///< File table overflow.
-//    EMFILE=24,      ///< Too many open files.
-//    ENOTTY=25,      ///< Not a typewriter.
-//    ETXTBSY=26,     ///< Text file busy.
-//    EFBIG=27,       ///< File too large.
-//    ENOSPC=28,      ///< No space left on device.
-//    ESPIPE=29,      ///< Illegal seek.
-//    EROFS=30,       ///< Read only file system.
-//    EMLINK=31,      ///< Too many links.
-//    EPIPE=32,       ///< Broken pipe.
-//    EDOM=33,        ///< Math arg out of domain of func.
-//    ERANGE=34,      ///< Math result not representable.
-//    ENOMSG=35,      ///< No message of desired type.
-//    EEIDRM=36,      ///< Identifier removed.
-//    ECHRNG=37,      ///< Channel number out of range.
-//    EL2NSYNC=38,    ///< Level 2 not synchronized.
-//    EL3HLT=39,      ///< Level 3 halted.
-//    EL3RST=40,      ///< Level 3 reset.
-//    ELNRNG=41,      ///< Link number out of range.
-//    EUNATCH=42,     ///< Protocol driver not attached.
-//    ENOCSI=43,      ///< No CSI structure available.
-//    EL2HLT=44,      ///< Level 2 halted.
-//    EDEADLK=45,     ///< Deadlock condition.
-//    ENOTREADY=46,   ///< Device not ready.
-//    EWRPROTECT=47,  ///< Write protected media.
-//    EFORMAT=48,     ///< Unformatted media.
-//} errno_e;
-//
+extern "C" void* memset(void* ptr, int value, size_t byteCount);
+
 ///**
 // * Loads an ELF file from a stream.
 // */
 //errno_e loadElf(Stream& stream);
-//
-///**
-// * The errorcode of the last OS operation.
-// */
-//extern errno_e errno;
-//
-//#ifdef VERBOSE
-///**
-// * The driver for the serial UART ports, available as tty devices to posix
-// * compatible kernels.
-// */
-//class tty : public Stream {
-//public:
-//    tty();
-//    virtual off_t seek(off_t offset);
-//    virtual ssize_t write(const void* buf, size_t nbyte);
-//    virtual ssize_t read(void* buf, size_t nbyte);
-//    /**
-//     * The tty0 device (required for debugging).
-//     */
-//    static tty tty0;
-//};
-//
-//#endif
+
+/**
+ * The definition of OS error codes. For a list of the error codes for the most
+ * common platforms, refer to <http://www.ioplex.com/~miallen/errcmp.html>
+ */
+typedef enum {
+    ESUCCESS=0,     ///< Operation completed successfully.
+    EPERM=1,        ///< Operation not permitted.
+    ENOENT=2,       ///< No such file or directory.
+    ESRCH=3,        ///< No such process.
+    EINTR=4,        ///< Interrupted system call.
+    EIO=5,          ///< I/O error.
+    ENXIO =6,       ///< No such device or address.
+    E2BIG =7,       ///< Argument list too long.
+    ENOEXEC=8,      ///< Exec format error.
+    EBADF=9,        ///< Bad file number.
+    ECHILD=10,      ///< No child process.
+    EGAIN =11,      ///< Try again.
+    ENOMEM=12,      ///< Not enough space.
+    EACCESS=13,     ///< Permission denied.
+    EFAULT=14,      ///< Bad address.
+    ENOTBLK=15,     ///< Block device required.
+    EBUSY =16,      ///< Device or resource busy.
+    EEXIST=17,      ///< File exists.
+    EXDEV =18,      ///< Cross-device link.
+    ENODEV=19,      ///< No such device.
+    ENOTDIR=20,     ///< Not a directory.
+    EISDIR=21,      ///< Is a directory.
+    EINVAL=22,      ///< Invalid argument.
+    ENFILE=23,      ///< File table overflow.
+    EMFILE=24,      ///< Too many open files.
+    ENOTTY=25,      ///< Not a typewriter.
+    ETXTBSY=26,     ///< Text file busy.
+    EFBIG=27,       ///< File too large.
+    ENOSPC=28,      ///< No space left on device.
+    ESPIPE=29,      ///< Illegal seek.
+    EROFS=30,       ///< Read only file system.
+    EMLINK=31,      ///< Too many links.
+    EPIPE=32,       ///< Broken pipe.
+    EDOM=33,        ///< Math arg out of domain of func.
+    ERANGE=34,      ///< Math result not representable.
+    ENOMSG=35,      ///< No message of desired type.
+    EEIDRM=36,      ///< Identifier removed.
+    ECHRNG=37,      ///< Channel number out of range.
+    EL2NSYNC=38,    ///< Level 2 not synchronized.
+    EL3HLT=39,      ///< Level 3 halted.
+    EL3RST=40,      ///< Level 3 reset.
+    ELNRNG=41,      ///< Link number out of range.
+    EUNATCH=42,     ///< Protocol driver not attached.
+    ENOCSI=43,      ///< No CSI structure available.
+    EL2HLT=44,      ///< Level 2 halted.
+    EDEADLK=45,     ///< Deadlock condition.
+    ENOTREADY=46,   ///< Device not ready.
+    EWRPROTECT=47,  ///< Write protected media.
+    EFORMAT=48,     ///< Unformatted media.
+} errno_e;
+
+/**
+ * The errorcode of the last OS operation.
+ */
+extern errno_e errno;
+
+#ifdef VERBOSE
+
+void initUart();
+int printf(const char*, ...);
+
+#else
+
+#define initUart()                      {}
+#define printf(...)                     {}
+#define assert(expression, ...)         {}
+
+#endif
+
+/**
+ * Checks wether a pointer is valid. See @ref invalidPtr for the definition
+ * of invalid pointers.
+ */
+static inline bool valid(const void* ptr) {
+	return ptr != (const void*)-1;
+}
+
+/**
+ * The definition of a typed, invalid pointer. Note, that nullptr is a valid
+ * pointer to the start of the physical memory.
+ */
+template<class C> static inline C* invalidPtr() {
+	return (C*)-1;
+}
 
 /**
  * A virtual address space.
@@ -229,18 +168,7 @@ int printf(const char*, ...);
  * same location in all memory maps.
  */
 class AddressSpace {
-public:
 //	typedef char MemPage[4096];
-//    /**
-//     * Resolves a virtual address into a physical address.
-//     *
-//     * @return The requested physical address or @ref INVALID_PTR, if the
-//     * address has not been mapped to physical memory.
-//     */
-//    void* getPhysicalAddress(
-//        const void* virtAddr    ///< The virtual address, for which the paging
-//                                ///< directory entry is saught.
-//    );
 //    /**
 //     * Unmaps a virtual memory block. The memory area does not need to be
 //     * mapped.
@@ -255,7 +183,6 @@ public:
 //                                ///< unmapped. Must be a multiple of the page
 //                                ///< size.
 //    );
-//public:
 //    /**
 //     * Resolves a physical address into a virtual address. If the address has
 //     * been mapped multiple times, the last entry is returned.
@@ -336,12 +263,27 @@ public:
 //     */
 //    static void init(
 //    );
-//    #ifdef VERBOSE
-//    /**
-//     * Determines, wether paging has alread be enabled or not.
-//     */
-//    static bool isPagingEnabled();
-//    #endif
+private:
+    /**
+     * The type independent implementation of @ref getPhysicalAddress
+     */
+    static void* getPhysicalAddressImpl(
+        const void* virtAddr
+    );
+public:
+    /**
+     * Resolves a virtual address into a physical address.
+     *
+     * @return The requested physical address or @ref INVALID_PTR, if the
+     * address has not been mapped to physical memory.
+     */
+    template<class C> static inline C* getPhysicalAddress(
+        const C* virtAddr   ///< The virtual address, which will be translated.
+    ) { return (C*)getPhysicalAddressImpl(virtAddr); }
+    /**
+     * Determines, whether paging has already be enabled or not.
+     */
+    static bool isPagingEnabled();
 };
 
 ///**
@@ -400,7 +342,7 @@ extern "C" void halt() __attribute__((noreturn));
  * The kerneml's main function.
  */
 extern "C" void kmain(
-	struct boot_data_s* data	///< Pointer to an architecture specific data
+	struct boot_data_s& data	///< Pointer to an architecture specific data
 								///< structure, which is passed by the boot
 								///< loader.
 ) __attribute__((noreturn));

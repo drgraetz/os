@@ -1372,7 +1372,7 @@ def __test(platform: _BuildInfo.Platform, generated_files: _ReadOnlyList) -> Non
     command_line = [
         platform.qemu,
         "-kernel", _Directory.logs.rel_path(_Directory.bin.get(platform.name).join("kernel")),
-        #"-serial", "file: test-" + platform.name + ".log"
+        "-serial", "file:test-" + platform.name + ".log"
         #"-initrd", join(_bin_dir, platform.name, "launcher")
     ] + platform.qemu_params
     _invoke(command_line, _Directory.logs)

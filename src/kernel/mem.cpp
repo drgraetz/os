@@ -1,12 +1,13 @@
-//#include "kernel.hpp"
-//
-///**
-// * @file
-// *
-// * Implements the kernel's memory functioniality.
-// */
-//
-//extern char CODE;
+#include "kernel.hpp"
+
+/**
+ * @file
+ *
+ * Implements the kernel's memory functioniality.
+ *
+ * @author Dr. Florian M. Grätz
+ */
+
 //#define IS_LOWMEM(x)		((x) < ((uint32_t)&CODE / AddressSpace::MEMPAGESIZE))
 //
 ///**
@@ -98,15 +99,15 @@
 //uint32_t MemoryManager::getFreePagesCount() {
 //    return freePagesCount;
 //}
-//
-//void* memset(void* ptr, int value, size_t byteCount) {
-//    char* c = (char*)ptr;
-//    for (; byteCount > 0; byteCount--) {
-//        *c++ = value;
-//    }
-//    return ptr;
-//}
-//
+
+void* memset(void* ptr, int value, size_t byteCount) {
+    char* c = (char*)ptr;
+    for (; byteCount > 0; byteCount--) {
+        *c++ = value;
+    }
+    return ptr;
+}
+
 //void* memcpy(void* dest, const void* source, size_t byteCount) {
 //    char* c = (char*)dest;
 //    for (; byteCount > 0; byteCount--) {
