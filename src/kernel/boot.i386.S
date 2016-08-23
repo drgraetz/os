@@ -111,7 +111,6 @@ _start.dontAdjustPagingEntry:
     movl    %esp, %ebp
     // load the global descriptor table
     movl    $GDT, %eax
-    subl    %edx, %eax
     pushl   %eax
     movl    $GDT.end, %eax
     subl    $GDT + 1, %eax
