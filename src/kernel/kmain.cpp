@@ -6,14 +6,6 @@
  * Holds the kernel's main function.
  */
 
-template <class C> C* getKernelPtr(const C* value) {
-    if (AddressSpace::isPagingEnabled()) {
-        return (C*)value;
-    } else {
-        return AddressSpace::getPhysicalAddress(value);
-    }
-}
-
 ///**
 // * The start of the list of module initializers. See @ref initModules() for
 // * details. This symbols is defined by the linker script.
@@ -44,6 +36,7 @@ void kmain(struct boot_data_s& data) {
     uart::init();
 //    initModules();
     printf("kmain(%p)\r\n", &data);
+    AddressSpace::getPhysicalAddress(&AddressSpace::kernel)->dump();
 //    void* ebp;
 //    void* esp;
 //    void* eip;

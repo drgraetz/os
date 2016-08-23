@@ -20,34 +20,11 @@ extern const char kernelAddr;
  */
 extern const char bootAddr;
 
-///**
-// * Truncates an address to the start of the corresponding memory page. The
-// * result is uint32_t and therefore must be casted into a pointer type in most
-// * cases.
-// */
-//#define TRUNC(x)        ((uint32_t)(x) & ~(MEMPAGE_SIZE - 1))
-///**
-// * Yields to the attributes of a paging dir/table entry or the offset within
-// * a memory page.
-// */
-//#define ATTR(entry)     (((uint32_t)entry) & (MEMPAGE_SIZE - 1))
-///**
-// * True, if a given directory/table entry is unused.
-// */
-//#define ISUNUSED(x)     ((x) == 0)
-///**
-// * Computes a physical address for a virtual kernel address.
-// */
-//#define PHYSADDR(x)     ((void*)((char*)x - (uint32_t)(&CODE - &PHYS)))
-///**
-// * The index in a paging directory, that corresponds to an address.
-// */
-//#define DIRINDEX(x)     ((uint32_t)(x) >> 22)
-///**
-// * The index in a paging table, that corresponds to an address.
-// */
-//#define TABLEINDEX(x)   (((uint32_t)(x) >> 12) & 1023)
-//
+/**
+ * The size of a memory page.
+ */
+#define MEMPAGE_SIZE    4096
+
 ///**
 // * The start of the kernel code in the physical address range.
 // */
@@ -68,47 +45,105 @@ extern const char bootAddr;
 // * The end of the kernel in the virtual address range.
 // */
 //extern const char END;
-//
-//namespace i386 {
-//
-///**
-// * Turns on paging and write protection in the virtual memory management unit.
-// */
-//static inline void enablePaging() {
-//    asm(
-//        "movl   %%cr0, %%eax;"
-//        "orl    $0x80010000, %%eax;"
-//        "movl   %%eax, %%cr0;" : :);
-//}
-//
-///**
-// * A paging table or paging directory. The upper 20 bits of every entry point
-// * to an address, the lower 12 bits define a memory page's attribute.
-// * @ref pageAttributes_e for a detailed description of possible page
-// * attributes.
-// */
-//typedef struct {
-//    uint32_t& operator[](size_t i) { return data[i]; }
-//    uint32_t data[1024];
-//} __attribute__((aligned(4096))) pageTable_t;
-//
-///**
-// * The attribute definition for a memory page.
-// */
-//typedef enum {
-//    PA_PRESENT = 1,     ///< Physically present in memory.
-//    PA_WRITABLE = 2,    ///< Write access allowed.
-//    PA_RING0 = 4,       ///< Accessible by user code.
-//    PA_WRITETHRU = 8,   ///< Write through caching enabled.
-//    PA_NOCACHE = 16,    ///< Caching disabled.
-//    PA_ACCESSED = 32,   ///< Set by read operation on memory in page.
-//    PA_DIRTY = 64,      ///< Set by write operation on memory in page.
-//    PA_4MBYTE = 128,    ///< Directory entry discrables 4Mbyte page instead
-//                        ///< of page table.
-//    PA_GLOBAL = 256,    ///< Entry is used globally, i.e. it is not
-//                        ///< updated, when a new table is loaded.
-//} pageAttributes_e;
-//
+
+namespace i386 {
+
+/**
+ * The attribute definition for a memory page.
+ */
+typedef enum {
+    PA_PRESENT = 1,     ///< Physically present in memory.
+    PA_WRITABLE = 2,    ///< Write access allowed.
+    PA_RING0 = 4,       ///< Accessible by user code.
+    PA_WRITETHRU = 8,   ///< Write through caching enabled.
+    PA_NOCACHE = 16,    ///< Caching disabled.
+    PA_ACCESSED = 32,   ///< Set by read operation on memory in page.
+    PA_DIRTY = 64,      ///< Set by write operation on memory in page.
+    PA_4MBYTE = 128,    ///< Directory entry discrables 4Mbyte page instead
+                        ///< of page table.
+    PA_GLOBAL = 256,    ///< Entry is used globally, i.e. it is not
+                        ///< updated, when a new table is loaded.
+    PA_OS0 = 0x000,     ///< Page is of OS specific type 0.
+    PA_OS1 = 0x200,     ///< Page is of OS specific type 1.
+    PA_OS2 = 0x400,     ///< Page is of OS specific type 2.
+    PA_OS3 = 0x600,     ///< Page is of OS specific type 3.
+    PA_OS4 = 0x800,     ///< Page is of OS specific type 4.
+    PA_OS5 = 0xA00,     ///< Page is of OS specific type 5.
+    PA_OS6 = 0xC00,     ///< Page is of OS specific type 6.
+    PA_OS7 = 0xE00,     ///< Page is of OS specific type 7.
+    PA_OS_MASK = PA_OS7 ///< Masks the specific bits.
+} pageAttributes_e;
+
+/**
+ * An entry in a page directory or page table. The topmost 10 bits of every
+ * pointer select an entry in a page directory of the current
+ * @ref AddressSpace. If the @ref PA_4MBYTE bit is set, the lower 22 bits
+ * select an entry in the 4 MByte page pointed to by the directory entry.
+ * Otherwise, the bits 12 ... 21 select an entry in the paging table pointed
+ * to by the entry in the directory. In the latter case, the lowest 12 bits
+ * define an offset in the 4 KByte page pointed to by the page table.
+ */
+typedef struct {
+private:
+    uint32_t data;      ///< The value of this.
+public:
+    /**
+     * Checks, whether this is an empty page table entry.
+     */
+    bool isEmpty() { return data == 0; }
+    /**
+     * Checks, whether this describes an entry of 4 MByte size.
+     */
+    bool is4MByte() { return data & PA_4MBYTE; }
+    /**
+     * Determines the physical address, this points to.
+     */
+    void* getPhysicalAddress() {
+        return (void*)(data & ~(MEMPAGE_SIZE - 1));
+    }
+    /**
+     * Returns the page attributes of this including the OS dependent
+     * information bits.
+     */
+    pageAttributes_e getAttributes() {
+        return (pageAttributes_e)(data & (MEMPAGE_SIZE - 1));
+    }
+} PageTableEntry;
+
+/**
+ * A page table.
+ */
+class PageTable {
+private:
+    PageTableEntry contents[1024];      ///< The contents of this.
+public:
+    /**
+     * Returns an entry.
+     */
+    PageTableEntry operator[](size_t index) {
+        return contents[index];
+    }
+};
+
+/**
+ * A page directory.
+ */
+class PageDirectory : public PageTable {
+public:
+    /**
+     * Returns the entry, which corresponds to a given virtual address.
+     */
+    PageTableEntry getEntry(const void* virtualAddr) {
+        uint32_t addr = (uint32_t)virtualAddr;
+        PageTableEntry dirEntry = (*this)[addr >> 22];
+        if (dirEntry.isEmpty() || dirEntry.is4MByte()) {
+            return dirEntry;
+        }
+        PageTable& table = *(PageTable*)dirEntry.getPhysicalAddress();
+        return table[(addr >> 12) & 1023];
+    }
+};
+
 ///**
 // * The i386 specific implementation of an address space.
 // */
@@ -173,15 +208,9 @@ extern const char bootAddr;
 ////}*/
 //public:
 //    /**
-//     * The contents of this. The topmost 10 bits of every pointer select an
-//     * entry in this. If the @ref PA_4MBYTE bit is set, the lower 22 bits
-//     * select an entry in the 4 MByte page pointed to by the directory entry.
-//     * Otherwise, the bits 12 ... 21 select an entry in the paging table
-//     * pointed to by the entry in the directory. In the latter case, the lowest
-//     * 12 bits define an offset in the 4 KByte page pointed to by the page
-//     * table.
+//     * The contents of this.
 //     */
-//    pageTable_t contents;
+//    PageDirectory contents;
 //    /**
 //     * Maps a single page of memory. The virtual address has either to be
 //     * unused or unmarked or already be paged to the same physical address
@@ -234,8 +263,8 @@ extern const char bootAddr;
 //		errno = ESUCCESS;
 //        return true;
 //    }
-//
-//    #ifdef VERBOSE
+
+//#ifdef VERBOSE
 //    /**
 //     * Gets the value of an entry in the paging table for a virtual address.
 //     *
@@ -256,8 +285,8 @@ extern const char bootAddr;
 //        }
 //        return result;
 //    }
-//    #endif
-//
+//#endif
+
 //    /**
 //     * Adjusts all addresses within in address space, which are mapped to the
 //     * kernel data area, to the physical memory addresses.
@@ -500,79 +529,7 @@ extern const char bootAddr;
 //    }
 //
 //};
-//
-///**
-// * The global descriptor table. The entries are structured as follows:
-// *
-// * Offset| Description          | Remarks
-// * -----:|----------------------|---------------------------------------------
-// * 000   | null-entry           | required by the processor specificaton
-// * 010   | kernel code segment  | ring 0, execute-only
-// * 020   | kernel data segment  | ring 0, read/write
-// * 030   | user code segment    | ring 3, callable from ring 0, execute-only
-// * 040   | user data segment    | rint 3, read/write
-// * 050   | task state for CPU 0 |
-// * 060   | task state for CPU 1 |
-// * ...   | ...                  |
-// *
-// * All code and data segments are 4 GByte long and start at the virtual address
-// * 0 and use 32 bits mode.
-// *
-// * Each entry is defined as follows:
-// *
-// * Bits  | Description
-// * -----:|----------------------------------------
-// * 0-15  | maximum address in segment, bits 0-15
-// * 16-39 | virtual start address, bits 0-23
-// * 40-47 | access byte
-// * 48-51 | maximum address in segment, bits 16-19
-// * 52-55 | flags
-// * 56-63 | virtual start address, bits 24-31
-// *
-// * The flags have the following meanings:
-// *
-// * Bit | Description
-// * ---:|----------------------------------------------------------------------
-// *  54 | access using 32 bit registers, code uses 32 bit instructions
-// *  55 | the maximum address is defined in 4 K blocks (instead of Bytes)
-// *
-// * The access bytes for code segments is defined as follows:
-// *
-// * Bits  | Description
-// * ------|---------------------------------------------------------------------
-// * 40    | set by the processor, if the segment is accessed
-// * 41    | code segment is readable
-// * 42    | executable from a lower privelege ring
-// * 43    | 1
-// * 44    | 1
-// * 45-46 | privilege level (0 = kernel, 3 = user)
-// * 47    | segment physically present in memory
-// *
-// * If bit 42 is set, the code may be called or jumped to from a lower privelege
-// * level. E.g., ring 3 code can be far-called from ring 0. If bit 42 is zero,
-// * the code can only be executed from another segment with the same privilege
-// * level.
-// *
-// * The access bytes for data segments is defined as follows:
-// *
-// * Bits  | Description
-// * ------|---------------------------------------------------------------------
-// * 40    | set by the processor, if the segment is accessed
-// * 41    | data segment is writable
-// * 42    | segment grows down, i.e. offset must be greater than limit
-// * 43    | 9
-// * 44    | 1
-// * 45-46 | privilege level (0 = kernel, 3 = user)
-// * 47    | segment physically present in memory
-// */
-//uint64_t __attribute__((aligned(8))) GDT[] = {
-//    0x0000000000000000,     // must be 0 due to intel specification
-//    0x00CF98000000FFFF,     // kernel code
-//    0x00CF92000000FFFF,     // kernel data
-//    0x00CFFC000000FFFF,     // user code
-//    0x00CFF2000000FFFF,     // user data
-//};
-//
+
 ///**
 // * The interrupt descriptor table. The table is corrected by the
 // * @ref AddressSpace::init function, so it can be interpreted by the CPU.
@@ -622,25 +579,7 @@ extern const char bootAddr;
 // * addresses after a return from this function.
 // */
 //static inline void loadGDT() {
-//    // load the global descriptor table
-//    asm(
-//        "pushl  %%ebx;"
-//        "pushw  %%ax;"
-//        "lgdt   (%%esp);" : :
-//        "a"(sizeof(i386::GDT) - 1), "b"(&i386::GDT));
-//    // initialize segment registers and set instruction pointer to the new
-//    // kernel area
-//    asm(
-//        "ljmpl  $010, $.loadCs;"
-//        ".loadCs:;"
-//        "movw   $020, %%ax;"
-//        "movw   %%ax, %%ds;"
-//        "movw   %%ax, %%es;"
-//        "movw   %%ax, %%fs;"
-//        "movw   %%ax, %%gs;"
-//        "movw   %%ax, %%ss;"
-//        "addl   $6, %%esp;" : :);
-//}
+}
 //
 ///**
 // * Loads the interrupt descriptor table from @ref IDT. Therefore, its contents
@@ -672,51 +611,53 @@ extern const char bootAddr;
 //}
 //
 //}
-//
-//using namespace i386;
-//
-//#ifdef VERBOSE
-//void AddressSpace::dump() {
-//   printf("===========================================\r\n");
-//    printf("PagingDirectory @ %p\r\n", this);
-//    const char* start = nullptr;
-//    do {
-//        uint32_t startEntry = ((AddressSpaceImpl*)this)->getEntry(start);
-//        if (!ISUNUSED(startEntry)) {
-//            const char* end = start;
-//            uint32_t startAttr = ATTR(startEntry);
-//            uint32_t endEntry;
-//            const char* phys = (char*)TRUNC(startEntry);
-//            do {
-//                end += MEMPAGE_SIZE;
-//                phys += MEMPAGE_SIZE;
-//                endEntry = ((AddressSpaceImpl*)this)->getEntry(end);
-//            } while (end != nullptr && (uint32_t)phys == TRUNC(endEntry) &&
-//                startAttr == ATTR(endEntry));
-//            char attribs[10];
-//            char* current = attribs;
-//            *current++ = startEntry & i386::PA_GLOBAL ? 'G' : '-';
-//            *current++ = startEntry & i386::PA_4MBYTE ? 'L' : '-';
-//            *current++ = startEntry & i386::PA_DIRTY ? 'D' : '-';
-//            *current++ = startEntry & i386::PA_ACCESSED ? 'A' : '-';
-//            *current++ = startEntry & i386::PA_NOCACHE ? '-' : 'C';
-//            *current++ = startEntry & i386::PA_WRITETHRU ? 'T' : '-';
-//            *current++ = startEntry & i386::PA_RING0 ? 'U' : 'K';
-//            *current++ = startEntry & i386::PA_WRITABLE ? 'W' : 'R';
-//            *current++ = startEntry & i386::PA_PRESENT ? 'P' : '-';
-//            *current = 0;
-//            uint32_t userAttrs = ATTR(startEntry) >> 9;
-//            printf("%p...%p -> %08x %s %x\r\n", start, end - 1,
-//                TRUNC(startEntry), attribs, userAttrs);
-//            start = end;
-//        } else {
-//            start += MEMPAGE_SIZE;
-//        }
-//    } while (start != nullptr);
-//    printf("===========================================\r\n");
-//}
-//#endif
-//
+
+using namespace i386;
+
+#ifdef VERBOSE
+void AddressSpace::dump() {
+    printf("===========================================\r\n");
+    printf("PagingDirectory @ %p\r\n", this);
+    const char* start = nullptr;
+    PageDirectory& dir = *(PageDirectory*)this;
+    do {
+        PageTableEntry startEntry = dir.getEntry(start);
+        if (startEntry.isEmpty()) {
+            start += MEMPAGE_SIZE;
+        } else {
+            const char* end = start;
+            pageAttributes_e startAttr = startEntry.getAttributes();
+            PageTableEntry endEntry = startEntry;
+            const char* phys = (char*)startEntry.getPhysicalAddress();
+            const char* startAddr = phys;
+            do {
+                end += MEMPAGE_SIZE;
+                phys += MEMPAGE_SIZE;
+                endEntry = dir.getEntry(end);
+            } while (end != nullptr && phys == endEntry.getPhysicalAddress() &&
+                startAttr == endEntry.getAttributes());
+            char attribs[10];
+            char* current = attribs;
+            *current++ = startAttr & PA_GLOBAL ? 'G' : '-';
+            *current++ = startAttr & PA_4MBYTE ? 'L' : '-';
+            *current++ = startAttr & PA_DIRTY ? 'D' : '-';
+            *current++ = startAttr & PA_ACCESSED ? 'A' : '-';
+            *current++ = startAttr & PA_NOCACHE ? '-' : 'C';
+            *current++ = startAttr & PA_WRITETHRU ? 'T' : '-';
+            *current++ = startAttr & PA_RING0 ? 'U' : 'K';
+            *current++ = startAttr & PA_WRITABLE ? 'W' : 'R';
+            *current++ = startAttr & PA_PRESENT ? 'P' : '-';
+            *current = 0;
+            uint32_t userAttrs = startAttr >> 9;
+            printf("%p...%p -> %08x %s %x\r\n", start, end - 1,
+                startAddr, attribs, userAttrs);
+            start = end;
+        }
+    } while (start != nullptr);
+    printf("===========================================\r\n");
+}
+#endif
+
 //// AddressSpace* AddressSpace::create() {
 //    // printf("create not implemented");
 //    // halt();
@@ -825,16 +766,5 @@ void* AddressSpace::getPhysicalAddressImpl(const void* virtAddr) {
 		size_t delta = &kernelAddr - &bootAddr;
 		return (void*)((const char*)virtAddr - delta);
 	}
-	if (!isPagingEnabled()) {
-		return (void*)virtAddr;
-	}
 	return invalidPtr<void>();
-}
-
-bool AddressSpace::isPagingEnabled() {
-    uint32_t result;
-    asm(
-        "movl   %%cr0, %%eax;" :
-        "=a"(result) : );
-    return (result & 0x80000000) != 0;
 }

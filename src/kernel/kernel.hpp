@@ -213,36 +213,6 @@ class AddressSpace {
 //     * not be created. In this case, errno holds an error code.
 //     */
 //    static AddressSpace* create();
-//#ifdef VERBOSE
-//    /**
-//     * Prints the contents of the paging tables. For each area of virtual
-//     * memory with the same attributes a line is printed. It contains the
-//     * following information:
-//     * - the virtual start and end addresses
-//     * - the physical start address
-//     * - the attributes of the memory block
-//     * - the user flags, which are one of the following: Kernel, User, Boot
-//     * The attributes are abbreviated with a single letter, as they are defined
-//     * in the following table.
-//     *
-//     * Letter | Value
-//     * -------|----------------------------------
-//     * G      | @ref PA_GLOBAL
-//     * L      | @ref PA_4MBYTE
-//     * D      | @ref PA_DIRTY
-//     * A      | @ref PA_ACCESSED
-//     * C      | not @ref PA_NOCACHE, i.e. cached
-//     * T      | @ref PA_WRITETHRU
-//     * U      | @ref PA_RING0, K otherwise
-//     * W      | @ref PA_WRITABLE, R otherwise
-//     * P      | @ref PA_PRESENT
-//     */
-//    void dump();
-//#endif
-//    /**
-//     * The kernel's address space.
-//     */
-//    static AddressSpace kernel;
 //    /**
 //     * Maps a virtual memory block to a physical memory block. If the virtual
 //     * address has already been mapped, the remaining parameters must match
@@ -281,6 +251,36 @@ private:
     );
 public:
     /**
+     * The kernel's address space.
+     */
+    static AddressSpace kernel;
+#ifdef VERBOSE
+    /**
+     * Prints the contents of the paging tables. For each area of virtual
+     * memory with the same attributes a line is printed. It contains the
+     * following information:
+     * - the virtual start and end addresses
+     * - the physical start address
+     * - the attributes of the memory block
+     * - the user flags, which are one of the following: Kernel, User, Boot
+     * The attributes are abbreviated with a single letter, as they are defined
+     * in the following table.
+     *
+     * Letter | Value
+     * -------|----------------------------------
+     * G      | @ref PA_GLOBAL
+     * L      | @ref PA_4MBYTE
+     * D      | @ref PA_DIRTY
+     * A      | @ref PA_ACCESSED
+     * C      | not @ref PA_NOCACHE, i.e. cached
+     * T      | @ref PA_WRITETHRU
+     * U      | @ref PA_RING0, K otherwise
+     * W      | @ref PA_WRITABLE, R otherwise
+     * P      | @ref PA_PRESENT
+     */
+    void dump();
+#endif
+    /**
      * Resolves a virtual address into a physical address.
      *
      * @return The requested physical address or @ref INVALID_PTR, if the
@@ -289,10 +289,6 @@ public:
     template<class C> static inline C* getPhysicalAddress(
         const C* virtAddr   ///< The virtual address, which will be translated.
     ) { return (C*)getPhysicalAddressImpl(virtAddr); }
-    /**
-     * Determines, whether paging has already be enabled or not.
-     */
-    static bool isPagingEnabled();
 };
 
 ///**
@@ -333,11 +329,9 @@ public:
  * boot.*.S, where * stands for the target platform. The entry function
  * performs the following operations:
  * - validate, that the boot process has been completed successfully
- * - initialize the kernel's stack (in unmapped memory, as memory management
- *   has not yet been setup)
- * - invoke @ref kmain(void)
- * - if kmain returns (which is not expected to happen): hang the processor
- *   infinitely
+ * - map the kernel into its virtual memory location
+ * - initialize the kernel's stack
+ * - invoke @ref kmain(struct boot_data_s&)
  */
 extern "C" void _start() __attribute__((noreturn));
 

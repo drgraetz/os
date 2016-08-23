@@ -13,16 +13,9 @@ SECTIONS {
         /* GCC exception handler */
         *(.eh_frame)
     }
-    /* uninitialized data, e.g. stack, uninitialized variables */
-    .bss ALIGN(4K) : AT(ADDR(.bss) - KERNEL_OFFSET) {
-        *(.bss)
-    }
-    /* initialized, writable data */
-    .data : AT(ADDR(.data) - KERNEL_OFFSET) {
-        *(.data)
-    }
     /* readonly data */
     .rodata ALIGN(4K) : AT(ADDR(.rodata) - KERNEL_OFFSET) {
+    physReadOnly = . - KERNEL_OFFSET;
         *(.rodata*)
         /* list of module initializers */
         . = ALIGN(4);
@@ -34,8 +27,18 @@ SECTIONS {
         *(.dtors)
         __DTOR_END__ = .;
     }
+    /* uninitialized data, e.g. stack, uninitialized variables */
+    .bss ALIGN(4K) : AT(ADDR(.bss) - KERNEL_OFFSET) {
+    physReadWrite = . - KERNEL_OFFSET;
+        *(.bss)
+    }
+    /* initialized, writable data */
+    .data : AT(ADDR(.data) - KERNEL_OFFSET) {
+        *(.data)
+    }
     /* discard all other segments */
     /DISCARD/ : {
     	*(*)
     }
+    physEnd = . - KERNEL_OFFSET;
 }

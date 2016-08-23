@@ -8,7 +8,7 @@
 		compiler-params=''
 		qemu='qemu-system-i386' qemu-params=''>
 		<linker-symbol name='bootAddr' value='0x00100000'/>
-		<linker-symbol name='kernelAddr' value='0xFFE00000'/>
+		<linker-symbol name='kernelAddr' value='0xFFC00000'/>
 	</platform>
 	
 	<!-- mfpu=vfp -->
