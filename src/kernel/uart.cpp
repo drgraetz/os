@@ -267,51 +267,51 @@ int vprintf(const char* format, va_list arg) {
             putchar(c);
             continue;
         }
-//        leadingChar = ' ';
-//        digits = 0;
+        leadingChar = ' ';
+        digits = 0;
         c = *format++;
-//        if (c == '0') {
-//            leadingChar = '0';
-//            c = *format++;
-//        }
-//        while (c >= '0' && c <= '9') {
-//            digits *= 10;
-//            digits += c - '0';
-//            c = *format++;
-//        }
+        if (c == '0') {
+            leadingChar = '0';
+            c = *format++;
+        }
+        while (c >= '0' && c <= '9') {
+            digits *= 10;
+            digits += c - '0';
+            c = *format++;
+        }
         switch (c) {
-//        case 'c':
-//            buffer[0] = va_arg(arg, unsigned int);
-//            buffer[1] = 0;
-//            string = buffer;
-//            break;
-//        case 'o':
-//        case 'O':
-//            __itoan(buffer, sizeof(buffer), 8, va_arg(arg, unsigned int),
-//                false);
-//            string = buffer;
-//            break;
-//        case 'd':
-//        case 'D':
-//        case 'u':
-//        case 'U':
-//            __itoan(buffer, sizeof(buffer), 10, va_arg(arg, unsigned int),
-//                false);
-//            string = buffer;
-//            break;
-//        case 'x':
-//            __itoan(buffer, sizeof(buffer), 16, va_arg(arg, unsigned int),
-//                false);
-//            string = buffer;
-//            break;
-//        case 'X':
-//            __itoan(buffer, sizeof(buffer), 16, va_arg(arg, unsigned int),
-//                true);
-//            string = buffer;
-//            break;
-//        case 's':
-//            string = va_arg(arg, const char*);
-//            break;
+        case 'c':
+            buffer[0] = va_arg(arg, unsigned int);
+            buffer[1] = 0;
+            string = buffer;
+            break;
+        case 'o':
+        case 'O':
+            __itoan(buffer, sizeof(buffer), 8, va_arg(arg, unsigned int),
+                false);
+            string = buffer;
+            break;
+        case 'd':
+        case 'D':
+        case 'u':
+        case 'U':
+            __itoan(buffer, sizeof(buffer), 10, va_arg(arg, unsigned int),
+                false);
+            string = buffer;
+            break;
+        case 'x':
+            __itoan(buffer, sizeof(buffer), 16, va_arg(arg, unsigned int),
+                false);
+            string = buffer;
+            break;
+        case 'X':
+            __itoan(buffer, sizeof(buffer), 16, va_arg(arg, unsigned int),
+                true);
+            string = buffer;
+            break;
+        case 's':
+            string = va_arg(arg, const char*);
+            break;
         case 'p':
         case 'P':
             __itoan(buffer, sizeof(buffer), 16, va_arg(arg, unsigned int),
