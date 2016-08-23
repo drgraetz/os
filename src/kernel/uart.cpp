@@ -253,10 +253,6 @@ int vprintf(const char* format, va_list arg) {
     if (format == nullptr || !valid(format)) {
         return -1;
     }
-    bool adjustAddresses = !AddressSpace::isPagingEnabled();
-    if (adjustAddresses) {
-        format = AddressSpace::getPhysicalAddress(format);
-    }
     int result = 0;
     char leadingChar;
     int digits;
@@ -323,9 +319,6 @@ int vprintf(const char* format, va_list arg) {
         default:
             putchar(c);
             continue;
-        }
-        if (adjustAddresses) {
-            string = AddressSpace::getPhysicalAddress(string);
         }
         ssize_t len = 0;
         for (const char* tmp = string; *tmp != 0; tmp++) {
