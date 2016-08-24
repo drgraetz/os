@@ -177,11 +177,22 @@ void init() {
 
 }
 
-extern "C" unsigned int __udivsi3(unsigned int a, unsigned int b) {
+CDECL unsigned int __udivsi3(unsigned int a, unsigned int b) {
+    size_t count = 1;
+    unsigned int mask = 1;
+    while (b < 0x80000000) {
+        b = b << 1;
+        mask = mask << 1;
+        count++;
+    }
     unsigned int result = 0;
-    while (a > b) {
-        result++;
-        a -= b;
+    for (; count > 0; count--) {
+        if (a >= b) {
+            a -= b;
+            result += mask;
+        }
+        b = b >> 1;
+        mask = mask >> 1;
     }
     return result;
 }
