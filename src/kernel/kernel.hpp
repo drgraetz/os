@@ -9,6 +9,11 @@
  */
 struct boot_data_s;
 
+/**
+ * The definition of a publicly visible declaration, accessible from C code.
+ */
+#define CDECL   extern "C"
+
 ///**
 // * The size of a memory page. The value will be provided by a platform
 // * dependend header file.
@@ -333,18 +338,18 @@ public:
  * - initialize the kernel's stack
  * - invoke @ref kmain(struct boot_data_s&)
  */
-extern "C" void _start() __attribute__((noreturn));
+CDECL void _start() __attribute__((noreturn));
 
 /**
  * Halts the execution of code on the currently active CPU. This function is
  * implemented in the file boot.*.S, where * stands for the target platform.
  */
-extern "C" void halt() __attribute__((noreturn));
+CDECL void halt() __attribute__((noreturn));
 
 /**
  * The kerneml's main function.
  */
-extern "C" void kmain(
+CDECL void kmain(
     struct boot_data_s& data    ///< Pointer to an architecture specific data
                                 ///< structure, which is passed by the boot
                                 ///< loader.
