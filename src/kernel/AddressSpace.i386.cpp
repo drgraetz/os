@@ -90,22 +90,22 @@ public:
     /**
      * Checks, whether this is an empty page table entry.
      */
-    bool isEmpty() { return data == 0; }
+    inline bool isEmpty() { return data == 0; }
     /**
      * Checks, whether this describes an entry of 4 MByte size.
      */
-    bool is4MByte() { return data & PA_4MBYTE; }
+    inline bool is4MByte() { return data & PA_4MBYTE; }
     /**
      * Determines the physical address, this points to.
      */
-    void* getPhysicalAddress() {
+    inline void* getPhysicalAddress() {
         return (void*)(data & ~(MEMPAGE_SIZE - 1));
     }
     /**
      * Returns the page attributes of this including the OS dependent
      * information bits.
      */
-    pageAttributes_e getAttributes() {
+    inline pageAttributes_e getAttributes() {
         return (pageAttributes_e)(data & (MEMPAGE_SIZE - 1));
     }
 } PageTableEntry;
@@ -617,7 +617,7 @@ using namespace i386;
 #ifdef VERBOSE
 void AddressSpace::dump() {
     printf("===========================================\r\n");
-    printf("PagingDirectory @ %p\r\n", this);
+    printf("Paging Directory @ %p\r\n", this);
     const char* start = nullptr;
     PageDirectory& dir = *(PageDirectory*)this;
     do {
