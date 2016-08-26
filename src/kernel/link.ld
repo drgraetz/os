@@ -6,6 +6,8 @@ SECTIONS {
     . = kernelAddr;
     /* code */
     .text : AT(bootAddr) {
+    _ZN12AddressSpace13PHYSICAL_ADDRE = . - KERNEL_OFFSET;
+    _ZN12AddressSpace11KERNEL_CODEE = .;
         /* boot code */
         *(.boot)
         /* all other code */
@@ -15,6 +17,7 @@ SECTIONS {
     }
     /* readonly data */
     .rodata ALIGN(4K) : AT(ADDR(.rodata) - KERNEL_OFFSET) {
+    _ZN12AddressSpace16KERNEL_READ_ONLYE = .;
     physReadOnly = . - KERNEL_OFFSET;
         *(.rodata*)
         /* list of module initializers */
@@ -29,16 +32,19 @@ SECTIONS {
     }
     /* uninitialized data, e.g. stack, uninitialized variables */
     .bss ALIGN(4K) : AT(ADDR(.bss) - KERNEL_OFFSET) {
+    _ZN12AddressSpace17KERNEL_READ_WRITEE = .;
     physReadWrite = . - KERNEL_OFFSET;
         *(.bss)
     }
     /* initialized, writable data */
     .data : AT(ADDR(.data) - KERNEL_OFFSET) {
         *(.data)
+    _ZN12AddressSpace10KERNEL_ENDE = .;
     }
     /* discard all other segments */
     /DISCARD/ : {
     	*(*)
     }
+    _ZN12AddressSpace17KERNEL_END = .;
     physEnd = . - KERNEL_OFFSET;
 }

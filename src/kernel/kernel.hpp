@@ -10,30 +10,27 @@
 struct boot_data_s;
 
 /**
+ * @file
+ * The symbol definitions for the kernel.
+ *
+ * @author Dr. Florian Manfred Grätz
+ */
+
+/**
  * The definition of a publicly visible declaration, accessible from C code.
  */
 #define CDECL   extern "C"
 
 ///**
-// * The size of a memory page. The value will be provided by a platform
-// * dependend header file.
-// */
-//#define MEMPAGE_SIZE
-
-/**
- * @file
- * The symbol definitions for the kernel.
- */
-
-///**
 // * Yields to the lesser of two values.
 // */
 //#define min(a, b)           (((a) < (b)) ? (a) : (b))
-///**
-// * Yields to number of elements in an array.
-// */
-//#define ARRAYSIZE(a)        (sizeof(a) / sizeof((a)[0]))
-//
+/**
+ * Yields to number of elements in an array.
+ */
+template <typename T, size_t N> constexpr size_t arraySize(const T (&)[N]) {
+    return N;
+}
 ////extern "C" void* memcpy(void*, const void*, size_t);
 extern "C" void* memset(void* ptr, int value, size_t byteCount);
 
@@ -116,7 +113,9 @@ void init();
 
 #ifdef VERBOSE
 
+void assertImpl(bool expression, const char* file, const int line);
 int printf(const char*, ...);
+#define assert(expression)  { assertImpl(expression, __FILE__, __LINE__); }
 
 #else
 
@@ -143,43 +142,6 @@ template<class C> static inline C* invalidPtr() {
 
 /**
  * A virtual address space.
- *
- * i386
- * ====
- *
- * The AddressSpace is represented by a paging directory for the virtual memory
- * management unit. The paging directory points to paging tables. The upper 10
- * bits of an address locate a paging table in the paging directory.
- *
- * If bit 6 of the corresponding page directory entry is 0, the next 10 bits of
- * the address locate a page in the page table. The least significant 12 bits
- * of an address determine an offset within this page.
- *
- * If bit 6 of a page directory entry is 1, it describes a 4 Mbyte page. The
- * least significant 22 bits of an address determine an offset within this
- * page.
- *
- * Each entry of the paging directory or a paging table is built as follows:
- *
- * Bits  | Used In | Description
- * ------|---------|--------------------------------------------------------
- * 12-32 | both    | physical address of the memory page aligned to 4K
- * 9-11  | both    | user flags, can be used by the operating system
- * 8     | table   | global, will not be updated when new dir is loaded
- * 7     | dir     | 4 MByte page is described instead of page table
- * 6     | table   | dirty, set by processor on write access to page
- * 5     | table   | accessed, set by processor on read access to page
- * 4     | both    | cache disabled
- * 3     | both    | write through caching enabled
- * 2     | both    | user (i.e. non ring 0) can access page
- * 1     | both    | write access allowed
- * 0     | both    | present in physical memory
- *
- * Unused bits should remain 0.
- *
- * Global pages will not be updated, if a new paging directory is loaded to
- * CR3. In Grätz.OS it is used for the kernel memory, as it is mapped to the
- * same location in all memory maps.
  */
 class AddressSpace {
 //	typedef char MemPage[4096];
@@ -208,45 +170,49 @@ class AddressSpace {
 //        const void* physAddr    ///< The physical address, which is resolved.
 //    );
 //    /**
-//     * Loads this into the memory management unit.
-//     */
-//    void load();
-//    /**
 //     * Creates a new address space.
 //     *
 //     * @return The newly created address space or INVALID_PTR, if it could
 //     * not be created. In this case, errno holds an error code.
 //     */
 //    static AddressSpace* create();
-//    /**
-//     * Maps a virtual memory block to a physical memory block. If the virtual
-//     * address has already been mapped, the remaining parameters must match
-//     * the already existing mapping.
-//     *
-//     * @return True on success, false otherwise. If the mapping failed,
-//     * @ref errno is set an error code.
-//     */
-//    bool map(
-//        const void* virtAddr,   ///< The virtual address of the memory block.
-//                                ///< Must be aligned to a page boundary.
-//        const void* physAddr,   ///< The physical address of the memory block.
-//                                ///< Must be aligned to a page boundary.
-//        size_t size,            ///< The size of the memory block. Must be
-//                                ///< a multiple of the page size.
-//        bool writable,          ///< Defines, whether write access is allowed.
-//        bool userAccess         ///< Defines, whether user code may access the
-//                                ///< memory area.
-//    );
-//    /**
-//     * Sets up paging. The following actions are performed:
-//     * - The kernel is mapped to its location at the upper boundary of the
-//     *   address range.
-//     * - The memory management unit is activated.
-//     * - The available system memory is reported to be free by invoking
-//     *   @ref MemoryManager::markAsFree(uint32_t)
-//     */
-//    static void init(
-//    );
+private:
+    /**
+     * Loads this into the memory management unit.
+     */
+    void load();
+    /**
+     * The first byte of the kernel in the physical memory. The address is
+     * defined in the linker script and its value is derived from
+     * buildinfo.xml.
+     */
+    static char PHYSICAL_ADDR;
+    /**
+     * The first byte of the kernel in the virtual memory. The address is
+     * defined in the linker script and its value is derived from
+     * buildinfo.xml.
+     */
+    static char KERNEL_CODE;
+    /**
+     * The first byte of read-only data in the virtual memory. The address is
+     * defined in the linker script.
+     */
+    static char KERNEL_READ_ONLY;
+    /**
+     * The first byte of read-write data in the virtual memory. The address is
+     * defined in the linker script.
+     */
+    static char KERNEL_READ_WRITE;
+    /**
+     * The last byte the kernel in the virtual memory. The address is defined
+     * in the linker script.
+     */
+    static char KERNEL_END;
+    /**
+     * The end of the stack. The address is defined in the boot.*.S file.
+     */
+public:
+    static char STACK;
 private:
     /**
      * The type independent implementation of @ref getPhysicalAddress
@@ -254,7 +220,66 @@ private:
     static void* getPhysicalAddressImpl(
         const void* virtAddr
     );
+    /**
+     * Adjust the addresses of the second level tables. This is required for
+     * the @ref kernel address space, as for it tables are defined in the
+     * virtual address space of the kernel.
+     */
+    void adjustTableAddresses();
+    /**
+     * Maps the kernel to a virtual address.
+     */
+    void mapKernel(
+        const void* virtAddr    ///< The virtual address, the kernel is mapped
+                                ///< to.
+    );
 public:
+    /**
+     * @return the size of a memory page.
+     */
+    static size_t getPageSize();
+    /**
+     * Maps a virtual memory block to a physical memory block. If the virtual
+     * address has already been mapped, the attributes of the mapped block are
+     * adjusted. If the physical address lies within the virtual address range
+     * of the kernel, the mapping is marked as global.
+     */
+    void map(
+        const void* virtAddr,   ///< The virtual address of the memory block.
+                                ///< Must be aligned to a page boundary.
+        const void* physAddr,   ///< The physical address of the memory block.
+                                ///< Must be aligned to a page boundary.
+        size_t size,            ///< The size of the memory block. Must be
+                                ///< a multiple of the page size.
+        bool writable,          ///< Defines, whether write access is allowed.
+        bool userAccess         ///< Defines, whether user code may access the
+                                ///< memory area.
+    );
+    /**
+     * Sets up paging. The following actions are performed:
+     * - The kernel is mapped 1:1 to its physical address. This is necessary,
+     *   as otherwise the code would continue execution at an invalid address
+     *   immediately after the activation of the memory management unit.
+     * - The kernel is mapped to its virtual location at the upper boundary of
+     *   the address range.
+     * - The memory management unit is activated.
+     */
+    static void init();
+    /**
+     * Enables paging. Therefore, the following steps are performed:
+     * - the the memory management unit is activated
+     * - the program counter register is updated to the virtual memory location
+     *   of the kernel
+     * - the stack pointers are updated to the virtual memory location of the
+     *   kernel
+     * - all pointers residing on the stack are adjusted
+     *
+     * Prior to enablePaging() @ref mapKernel(const void*) has to be invoked.
+     * Otherwise the processor will cause an page fault, as program execution
+     * will be continued at a virtual address that is not mapped to the
+     * physical memory.
+     */
+    static void enablePaging();
     /**
      * The kernel's address space.
      */
@@ -262,26 +287,25 @@ public:
 #ifdef VERBOSE
     /**
      * Prints the contents of the paging tables. For each area of virtual
-     * memory with the same attributes a line is printed. It contains the
-     * following information:
+     * memory with the same attributes a line is printed with the following
+     * information:
      * - the virtual start and end addresses
      * - the physical start address
-     * - the attributes of the memory block
-     * - the user flags, which are one of the following: Kernel, User, Boot
-     * The attributes are abbreviated with a single letter, as they are defined
-     * in the following table.
+     * - the platform specific attributes of the memory block
+     *
+     * i386
+     * ====
      *
      * Letter | Value
-     * -------|----------------------------------
-     * G      | @ref PA_GLOBAL
-     * L      | @ref PA_4MBYTE
-     * D      | @ref PA_DIRTY
-     * A      | @ref PA_ACCESSED
-     * C      | not @ref PA_NOCACHE, i.e. cached
-     * T      | @ref PA_WRITETHRU
-     * U      | @ref PA_RING0, K otherwise
-     * W      | @ref PA_WRITABLE, R otherwise
-     * P      | @ref PA_PRESENT
+     * -------|----------------------------------------------------
+     * G      | globally accessible
+     * D      | dirty, i.e. the processor has written to the page
+     * A      | accessed, i.e. the processor has read from the pae
+     * C      | cached
+     * T      | write-through-caching
+     * U/K    | user/kernel mode
+     * W/R    | writable/read-only
+     * P      | present in memory
      */
     void dump();
 #endif
@@ -334,7 +358,6 @@ public:
  * boot.*.S, where * stands for the target platform. The entry function
  * performs the following operations:
  * - validate, that the boot process has been completed successfully
- * - map the kernel into its virtual memory location
  * - initialize the kernel's stack
  * - invoke @ref kmain(struct boot_data_s&)
  */

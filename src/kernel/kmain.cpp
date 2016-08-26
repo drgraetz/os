@@ -34,9 +34,10 @@
 
 void kmain(struct boot_data_s& data) {
     uart::init();
-//    initModules();
     printf("kmain(%p)\r\n", &data);
-    AddressSpace::kernel.dump();
+    AddressSpace::init();
+//    initModules();
+    AddressSpace::getPhysicalAddress(&AddressSpace::kernel)->dump();
 //    void* ebp;
 //    void* esp;
 //    void* eip;
