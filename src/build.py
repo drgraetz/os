@@ -1,4 +1,5 @@
 #!/bin/python3
+from sys import platform
  
 ##
 # @package  build
@@ -624,6 +625,7 @@ class _CommandLine:
     use_color = True
     rebuild = False
     createAssemblerFiles = False
+    makeTool = None
      
     @staticmethod
     def evaluate() -> None:
@@ -644,6 +646,9 @@ class _CommandLine:
                     _CommandLine.rebuild = True
                 elif current == "--asm":
                     _CommandLine.createAssemblerFiles = True
+                elif current == "--maketool":
+                    _CommandLine.makeTool = argv[i]
+                    i += 1
                 else:
                     raise ValueError("Invalid command line option.")
             except Exception as e:
@@ -665,6 +670,7 @@ class _CommandLine:
         print("--max-line-width x    print a maximum of x characters per line (default value: 79)")
         print("--rebuild             rebuild all binaries rather than an incremental build")
         print("--asm                 create intermediate assembler files")
+        print("--maketool name       make a certain tool defined in buildinfo.xml")
         exit()
       
       
@@ -1462,9 +1468,16 @@ def _get_paths_from_tree(tree: dict) -> list:
     return result
 
 
+def __makeTool(platform: _BuildInfo.Platform, generatedFiles: list) -> None:
+    _BuildInfo.Tool.get(_CommandLine.makeTool, platform.target)
+
+
 _CommandLine.evaluate()
 __init_logging()
 _Directory.__static_init__()
-result = _BuildInfo.invokeForAllPlatforms([__compile, __link, __test])
-_Directory.obj.erase_contents(result)
-_Directory.bin.erase_contents(result)
+if _CommandLine.makeTool is None:
+    result = _BuildInfo.invokeForAllPlatforms([__compile, __link, __test])
+    _Directory.obj.erase_contents(result)
+    _Directory.bin.erase_contents(result)
+else:
+    _BuildInfo.invokeForAllPlatforms([__makeTool])

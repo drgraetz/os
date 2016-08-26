@@ -34,5 +34,9 @@
 		<package url='https://ftp.gnu.org/gnu/binutils/binutils-2.26.tar.bz2'/>
 		<executable name='ld'/>
 	</tool>
+	
+	<tool name='gdb' target-dependent='true'>
+	   <package url='https://ftp.gnu.org/gnu/gdb/gdb-7.11.tar.xz'/>
+	</tool>
 
 </build-info>
