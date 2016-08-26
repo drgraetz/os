@@ -193,6 +193,13 @@ bool isReadyToSend();
 
 }
 
+void assertImpl(bool expression, const char* file, const int line) {
+    if (!expression) {
+        printf("***ASSERT IN %s, line %u ***\r\n", file, line);
+        halt();
+    }
+}
+
 int putchar(int value) {
     using namespace uart;
     if ((value < 32 || value > 127) && value != '\r' && value != '\n' &&
@@ -253,6 +260,7 @@ int vprintf(const char* format, va_list arg) {
     if (format == nullptr || !valid(format)) {
         return -1;
     }
+    format = AddressSpace::getPhysicalAddress(format);
     int result = 0;
     char leadingChar;
     int digits;
@@ -306,7 +314,8 @@ int vprintf(const char* format, va_list arg) {
             string = buffer;
             break;
         case 's':
-            string = va_arg(arg, const char*);
+            string = AddressSpace::getPhysicalAddress(
+                va_arg(arg, const char*));
             break;
         case 'p':
         case 'P':
