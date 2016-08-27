@@ -216,9 +216,7 @@ private:
     /**
      * The end of the stack. The address is defined in the boot.*.S file.
      */
-public:
     static char STACK;
-private:
     /**
      * The type independent implementation of @ref getPhysicalAddress
      */
@@ -238,6 +236,28 @@ private:
         const void* virtAddr    ///< The virtual address, the kernel is mapped
                                 ///< to.
     );
+    /**
+     * Enables paging. Therefore, the following steps are performed:
+     * - the the memory management unit is activated
+     * - the program counter register is updated to the virtual memory location
+     *   of the kernel
+     *
+     * Prior to enablePaging() @ref mapKernel(const void*) has to be invoked.
+     * Otherwise the processor will cause an page fault, as program execution
+     * will be continued at a virtual address that is not mapped to the
+     * physical memory.
+     */
+    static void enablePaging();
+    /**
+     * Adjusts the stack from the physical addresses used during the boot to
+     * the virtual addresses used by the kernel. The pointers residing on the
+     * stack are also adjusted.
+     *
+     * Prior to adjustStack() @ref enablePaging() has to be invoked. Otherwise
+     * the stack will point to a memory location, which most likely does not
+     * exist or contains uninitalized data.
+     */
+    static void adjustStack();
 public:
     /**
      * Maps a virtual memory block to a physical memory block. If the virtual
@@ -266,21 +286,6 @@ public:
      * - The memory management unit is activated.
      */
     static void init();
-    /**
-     * Enables paging. Therefore, the following steps are performed:
-     * - the the memory management unit is activated
-     * - the program counter register is updated to the virtual memory location
-     *   of the kernel
-     * - the stack pointers are updated to the virtual memory location of the
-     *   kernel
-     * - all pointers residing on the stack are adjusted
-     *
-     * Prior to enablePaging() @ref mapKernel(const void*) has to be invoked.
-     * Otherwise the processor will cause an page fault, as program execution
-     * will be continued at a virtual address that is not mapped to the
-     * physical memory.
-     */
-    static void enablePaging();
     /**
      * The kernel's address space.
      */
