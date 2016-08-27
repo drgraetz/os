@@ -917,10 +917,6 @@ void AddressSpace::map(const void* virt, const void* phys, size_t size,
 //    }
 //}
 
-size_t AddressSpace::getPageSize() {
-    return PAGESIZE;
-}
-
 void AddressSpace::adjustTableAddresses() {
     PageDirectory& dir = *(PageDirectory*)this;
     size_t entryCount = sizeof(PageDirectory) / sizeof(PageTableEntry);

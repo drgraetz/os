@@ -141,7 +141,12 @@ template<class C> static inline C* invalidPtr() {
 }
 
 /**
- * A virtual address space.
+ * A virtual address space. Dr.Grätz OS requires a memory management unit on
+ * the target, so applications and drivers can be run in separate address
+ * spaces and may not interfere with each other.
+ *
+ * A good overview of memory management in general can be found at
+ * <https://www.cs.rutgers.edu/~pxk/416/notes/10-paging.html>
  */
 class AddressSpace {
 //	typedef char MemPage[4096];
@@ -234,10 +239,6 @@ private:
                                 ///< to.
     );
 public:
-    /**
-     * @return the size of a memory page.
-     */
-    static size_t getPageSize();
     /**
      * Maps a virtual memory block to a physical memory block. If the virtual
      * address has already been mapped, the attributes of the mapped block are
