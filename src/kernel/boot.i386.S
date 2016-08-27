@@ -73,9 +73,9 @@ LastPageTable:
 .align 4096
 _ZN12AddressSpace6kernelE:
 .globl _ZN12AddressSpace6kernelE
-    .int    FirstPageTable + 0x003
+    .int    FirstPageTable + 0x003  // writable, present
     .skip(4088)
-    .int    LastPageTable + 0x107
+    .int    LastPageTable + 0x103   // global, writable, present
 
 .section .text
 _handleException:
