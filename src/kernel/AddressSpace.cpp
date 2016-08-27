@@ -2,8 +2,7 @@
 
 void AddressSpace::mapKernel(const void* virtAddr) {
     size_t readOnlySize = &KERNEL_READ_WRITE - &KERNEL_CODE;
-    size_t readWriteSize = ((&KERNEL_END - &KERNEL_READ_WRITE) +
-        AddressSpace::getPageSize() - 1) & ~(AddressSpace::getPageSize() - 1);
+    size_t readWriteSize = &KERNEL_END - &KERNEL_READ_WRITE;
     map(virtAddr, &PHYSICAL_ADDR, readOnlySize, false, false);
     map((const char*)virtAddr + readOnlySize,
         &PHYSICAL_ADDR + readOnlySize,
@@ -19,6 +18,7 @@ void AddressSpace::init() {
     kernel.mapKernel(&KERNEL_CODE);
     kernel.load();
     AddressSpace::enablePaging();
+    AddressSpace::adjustStack();
 }
 
 

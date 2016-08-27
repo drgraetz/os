@@ -16,7 +16,7 @@ SECTIONS {
         *(.eh_frame)
     }
     /* readonly data */
-    .rodata ALIGN(4K) : AT(ADDR(.rodata) - KERNEL_OFFSET) {
+    .rodata : AT(ADDR(.rodata) - KERNEL_OFFSET) {
     _ZN12AddressSpace16KERNEL_READ_ONLYE = .;
     physReadOnly = . - KERNEL_OFFSET;
         *(.rodata*)
@@ -31,7 +31,7 @@ SECTIONS {
         __DTOR_END__ = .;
     }
     /* uninitialized data, e.g. stack, uninitialized variables */
-    .bss ALIGN(4K) : AT(ADDR(.bss) - KERNEL_OFFSET) {
+    .bss : AT(ADDR(.bss) - KERNEL_OFFSET) {
     _ZN12AddressSpace17KERNEL_READ_WRITEE = .;
     physReadWrite = . - KERNEL_OFFSET;
         *(.bss)
@@ -39,12 +39,11 @@ SECTIONS {
     /* initialized, writable data */
     .data : AT(ADDR(.data) - KERNEL_OFFSET) {
         *(.data)
-    _ZN12AddressSpace10KERNEL_ENDE = .;
+    _ZN12AddressSpace10KERNEL_ENDE = ALIGN(pageSize);
     }
     /* discard all other segments */
     /DISCARD/ : {
     	*(*)
     }
     _ZN12AddressSpace17KERNEL_END = .;
-    physEnd = . - KERNEL_OFFSET;
 }

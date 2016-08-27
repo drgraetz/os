@@ -9,14 +9,16 @@
 		qemu='qemu-system-i386' qemu-params=''>
 		<linker-symbol name='bootAddr' value='0x00100000'/>
 		<linker-symbol name='kernelAddr' value='0xFFC00000'/>
+        <linker-symbol name='pageSize' value='4096'/>
 	</platform>
 	
 	<!-- mfpu=vfp -->
 	<platform name='rpi' target-triplet='arm-elf-eabi' cpu='arm1176jzf-s'
 		compiler-params='-mfloat-abi=hard'
 		qemu='qemu-system-arm' qemu-params='-M raspi -cpu arm1176 -m 256'>
-		<linker-symbol name='bootAddr' value='0x00008000'/>
-		<linker-symbol name='kernelAddr' value='0xFFF08000'/>
+        <linker-symbol name='bootAddr' value='0x00008000'/>
+        <linker-symbol name='kernelAddr' value='0xFFF08000'/>
+        <linker-symbol name='pageSize' value='4096'/>
 	</platform>
 	
 	<signature uri='llvm.org' public-key='02119294' extension='.sig'/>

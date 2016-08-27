@@ -933,7 +933,6 @@ void AddressSpace::load() {
 }
 
 void AddressSpace::enablePaging() {
-    uint32_t delta = &KERNEL_CODE - &PHYSICAL_ADDR;
     // set bits 31 and 16 in cr0 to enable paging and to turn on the
     // evaluation of access rights
     asm(
@@ -961,6 +960,10 @@ void AddressSpace::enablePaging() {
         "movw   %%ax, %%gs\r\n"
         "movw   %%ax, %%ss\r\n" : :
     );
+}
+
+void AddressSpace::adjustStack() {
+    uint32_t delta = &KERNEL_CODE - &PHYSICAL_ADDR;
     // adjust the stack pointer
     asm(
         "addl   %%eax, %%esp\r\n"
