@@ -6,10 +6,13 @@
 .section .boot
 .globl _start
 _start:
-	// initialize stack
-    ldr    sp, =stack.end
+	// initialize stack and adjust its address by the difference between
+	// virtual and physical address
+    ldr     r3, =KERNEL_OFFSET
+    ldr     sp, =stack.end
+    sub     sp, sp, r3
 	// call kmain
-	blx    kmain
+	blx     kmain
     // loop infinetly
 .size _start, . - _start
 .globl halt
