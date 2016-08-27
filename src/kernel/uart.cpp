@@ -195,7 +195,7 @@ bool isReadyToSend();
 
 void assertImpl(bool expression, const char* file, const int line) {
     if (!expression) {
-        printf("***ASSERT IN %s, line %u ***\r\n", file, line);
+        printf("*** ASSERTION IN %s, line %u ***\r\n", file, line);
         halt();
     }
 }
