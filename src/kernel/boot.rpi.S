@@ -21,9 +21,25 @@ halt:
     b       halt
 .size _halt, . - halt
 
-.section .rodata
-.align 4
+.section .bss
+.align 2    // 2^2 = 4
 stack:
 	.skip(4096)
 stack.end:
 .size stack, . - stack
+
+.align 10   // 2^10 = 1024
+FirstPageTable:
+    .skip(1024)
+.size FirstPageTable, . - FirstPageTable
+LastPageTable:
+    .skip(1024)
+.size LastPageTable, . - LastPageTable
+
+.section .data
+.align 12   // 2^12 = 16384
+_ZN12AddressSpace6kernelE:
+.globl _ZN12AddressSpace6kernelE
+    .int    FirstPageTable + 0x011  // page descriptor
+    .skip(0x3FF8)
+    .int    LastPageTable + 0x011   // page descriptor
