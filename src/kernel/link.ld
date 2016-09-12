@@ -31,12 +31,13 @@ SECTIONS {
         __DTOR_END__ = .;
     }
     /* uninitialized data, e.g. stack, uninitialized variables */
+    . = ALIGN(pageSize);
     .bss : AT(ADDR(.bss) - KERNEL_OFFSET) {
     _ZN12AddressSpace17KERNEL_READ_WRITEE = .;
     physReadWrite = . - KERNEL_OFFSET;
         *(.bss)
     }
-    /* initialized, writable data */
+    /* preinitialized, writable data */
     .data : AT(ADDR(.data) - KERNEL_OFFSET) {
         *(.data)
     _ZN12AddressSpace10KERNEL_ENDE = ALIGN(pageSize);
