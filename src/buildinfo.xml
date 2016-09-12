@@ -42,6 +42,7 @@
     </tool>
     
     <spec url='https://www.raspberrypi.org/wp-content/uploads/2012/02/BCM2835-ARM-Peripherals.pdf'/>
-    <spec url='http://infocenter.arm.com/help/topic/com.arm.doc.ddi0333h/DDI0333H_arm1176jzs_r0p7_trm.pdf'/>
+    <spec url='https://infocenter.arm.com/help/topic/com.arm.doc.ddi0333h/DDI0333H_arm1176jzs_r0p7_trm.pdf'/>
+    <spec url='https://homepages.wmich.edu/~grantner/ece6050/ARM7100vA_3.pdf'/>
 
 </build-info>
