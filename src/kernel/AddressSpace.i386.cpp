@@ -1,4 +1,3 @@
-#include <multiboot/multiboot.h>
 #include "kernel.hpp"
 
 /**
@@ -8,15 +7,6 @@
  *
  * @author Dr. Florian Manfred Grätz
  */
-
-/**
- * The size of a memory page in bytes.
- */
-#define PAGESIZE        4096
-/**
- * The size of a large memory page in bytes.
- */
-#define LARGEPAGESIZE   (PAGESIZE * 1024)
 
 /**
  * The global descriptor table. The entries are structured as follows:
@@ -89,35 +79,158 @@ uint64_t GDT[] __attribute__((aligned(8))) = {
     0x00CFFC000000FFFF,     // user code
     0x00CFF2000000FFFF};    // user data
 
-/**
- * The attribute definition for a memory page.
- */
-typedef enum {
-    PA_PRESENT = 1,     ///< Physically present in memory.
-    PA_WRITABLE = 2,    ///< Write access allowed.
-    PA_RING0 = 4,       ///< Accessible by user code.
-    PA_WRITETHRU = 8,   ///< Write through caching enabled.
-    PA_NOCACHE = 16,    ///< Caching disabled.
-    PA_ACCESSED = 32,   ///< Set by read operation on memory in page.
-    PA_DIRTY = 64,      ///< Set by write operation on memory in page.
-    PA_4MBYTE = 128,    ///< Directory entry discrables 4Mbyte page instead
-                        ///< of page table.
-    PA_GLOBAL = 256,    ///< Entry is used globally, i.e. it is not
-                        ///< updated, when a new table is loaded.
-    PA_OS0 = 0x000,     ///< Page is of OS specific type 0.
-    PA_OS1 = 0x200,     ///< Page is of OS specific type 1.
-    PA_OS2 = 0x400,     ///< Page is of OS specific type 2.
-    PA_OS3 = 0x600,     ///< Page is of OS specific type 3.
-    PA_OS4 = 0x800,     ///< Page is of OS specific type 4.
-    PA_OS5 = 0xA00,     ///< Page is of OS specific type 5.
-    PA_OS6 = 0xC00,     ///< Page is of OS specific type 6.
-    PA_OS7 = 0xE00,     ///< Page is of OS specific type 7.
-    PA_OS_MASK = PA_OS7 ///< Masks the specific bits.
-} pageAttributes_e;
+void AddressSpace::load() {
+    asm(
+        "movl   %%eax, %%cr3" : :
+        "a"(this)
+    );
+}
+
+bool AddressSpace::isPagingEnabled() {
+    uint32_t cr0;
+    asm(
+        "movl   %%cr0, %%eax\r\n" :
+        "=a"(cr0)
+    );
+    return cr0 & 0x80000000;
+}
+
+void AddressSpace::enablePaging() {
+    // set bits 31 and 16 in cr0 to enable paging and to turn on the
+    // evaluation of access rights
+    asm(
+        "movl   %%cr0, %%eax\r\n"
+        "orl    $0x80010000, %%eax\r\n"
+        "movl   %%eax, %%cr0\r\n" : :
+    );
+    // load the global descriptor table
+    asm(
+        "pushl  %%eax\r\n"
+        "pushw  %%bx\r\n"
+        "lgdt   (%%esp)\r\n"
+        "addl   $6, %%esp\r\n" : :
+        "a"(&GDT), "b"(sizeof(GDT) - 1)
+    );
+    // initialize segment registers and set instruction pointer to the new
+    // kernel area
+    asm(
+        "ljmpl  $010, $_loadCs\r\n"
+        "_loadCs:\r\n"
+        "movw   $020, %%ax\r\n"
+        "movw   %%ax, %%ds\r\n"
+        "movw   %%ax, %%es\r\n"
+        "movw   %%ax, %%fs\r\n"
+        "movw   %%ax, %%gs\r\n"
+        "movw   %%ax, %%ss\r\n" : :
+    );
+}
+
+void AddressSpace::adjustStack() {
+    uint32_t delta = &KERNEL_CODE - &PHYSICAL_ADDR;
+    // adjust the stack pointer
+    asm(
+        "addl   %%eax, %%esp\r\n"
+        "addl   %%eax, %%ebp\r\n" : :
+        "a"(delta)
+    );
+    // adjust the pointers saved to the stack
+    uint32_t* stack;
+    asm(
+        "movl   %%ebp, %%eax\r\n" :
+        "=a"(stack)
+    );
+    while ((void*)stack < &STACK) {
+        uint32_t value = *stack + delta;
+        *stack = value;
+        stack = (uint32_t*)value;
+        uint32_t* programCounter = stack + 1;
+        *programCounter += delta;
+    }
+}
+
+const int AddressSpace::ADDRESSBITSPERLEVEL[] = {10, 10, 0};
+
+#ifdef X
+
+class Entry {
+private:
+    uint32_t data;
+public:
+    /**
+     * Checks, whether this is an empty page table entry.
+     */
+    inline bool isEmpty() {
+        return data == 0;
+    }
+    /**
+     * Returns the page attributes of this including the OS dependent
+     * information bits.
+     */
+    inline pageAttributes_e getAttributes() {
+        return (pageAttributes_e)(data & 0xFFF);
+    }
+    /**
+     * Determines the physical address, to which this points to.
+     */
+    inline void* getPhysicalAddress() {
+        return (void*)(data & 0xFFFFF000);
+    }
+    /**
+     * Sets the physical address, to which this points to.
+     */
+    inline void setPhysicalAddress(const void* address) {
+        assert(((uint32_t)address & 0xFFF) == 0);
+        data = (uint32_t)address | (data & 0xFFF);
+    }
+};
+
+class PageDir : public Table<1024, Entry> {
+};
+
+void AddressSpace::dump() {
+    assert(false);
+}
+
+void AddressSpace::load() {
+    assert(false);
+}
+
+void AddressSpace::enablePaging() {
+    assert(false);
+}
+
+void AddressSpace::adjustTableAddresses() {
+    ((PageDir*)this)->adjustAddresses();
+}
+
+void AddressSpace::adjustStack() {
+    assert(false);
+}
+
+void AddressSpace::map(const void* virt, const void* phys, size_t size,
+    bool write, bool user) {
+    ((PageDir*)this)->map(virt, phys, size, write, user);
+}
+
+/*class AddressSpaceImpl :
+    public TwoLevelAddressSpace<0x1000, uint32_t> {
+};*/
 
 static inline pageAttributes_e operator |(pageAttributes_e a,
     pageAttributes_e b) {
     return (pageAttributes_e)((uint32_t)a | (uint32_t)b);
+}
+
+static inline void operator |=(pageAttributes_e& a, pageAttributes_e b) {
+    a = (a | b);
+}
+
+static pageAttributes_e getAttributes(const void* virtAddr, bool write, bool user) {
+    pageAttributes_e attr = PA_PRESENT;
+    if (write) attr |= PA_WRITABLE;
+    if (user) attr |= PA_RING0;
+    if (AddressSpace::inKernel(virtAddr)) attr |= PA_GLOBAL;
+    return attr;
 }
 
 /**
@@ -168,26 +281,9 @@ private:
     uint32_t data;      ///< The value of this.
 public:
     /**
-     * Returns the page attributes of this including the OS dependent
-     * information bits.
-     */
-    inline pageAttributes_e getAttributes() {
-        return (pageAttributes_e)(data & (PAGESIZE - 1));
-    }
-    /**
-     * Determines the physical address, this points to.
-     */
-    inline void* getPhysicalAddress() {
-        return (void*)(data & ~(PAGESIZE - 1));
-    }
-    /**
      * Checks, whether this describes an entry of 4 MByte size.
      */
     inline bool isLargePage() { return data & PA_4MBYTE; }
-    /**
-     * Checks, whether this is an empty page table entry.
-     */
-    inline bool isEmpty() { return data == 0; }
     /**
      * Assigns a value to this.
      */
@@ -271,17 +367,6 @@ public:
             return dir;
         } else {
             return dir[virtAddr];
-        }
-    }
-    /**
-     * Returns the size of a memory paged to a virtual address
-     */
-    size_t getEntrySize(const void* virtAddr) {
-        PageDirEntry& dir = (*this)[virtAddr];
-        if (dir.isEmpty() || dir.isLargePage()) {
-            return LARGEPAGESIZE;
-        } else {
-            return PAGESIZE;
         }
     }
 };
@@ -722,18 +807,6 @@ public:
 // */
 //static inline void loadGDT() {
 
-static inline bool aligned(size_t size) {
-    return (size & (PAGESIZE - 1)) == 0;
-}
-
-static inline bool aligned(const void* ptr) {
-    return ((uint32_t)ptr & (PAGESIZE - 1)) == 0;
-}
-
-static inline bool alignedlarge(const void* ptr) {
-    return ((uint32_t)ptr & (LARGEPAGESIZE - 1)) == 0;
-}
-
 //
 ///**
 // * Loads the interrupt descriptor table from @ref IDT. Therefore, its contents
@@ -768,6 +841,7 @@ static inline bool alignedlarge(const void* ptr) {
 
 #ifdef VERBOSE
 void AddressSpace::dump() {
+    assert(false);
     printf("==========================================\r\n");
     printf("Paging Directory @ %p\r\n", this);
     const char* startAddr = nullptr;
@@ -775,7 +849,7 @@ void AddressSpace::dump() {
     do {
         PageTableBase& startEntry = dir.getEntry(startAddr);
         if (startEntry.isEmpty()) {
-            startAddr += dir.getEntrySize(startAddr);
+            startAddr += AddressSpaceImpl::getPageSize() * 1024;
             continue;
         }
         const char* endAddr = startAddr;
@@ -783,7 +857,7 @@ void AddressSpace::dump() {
         const char* startPhys = phys;
         uint32_t startAttribs = startEntry.getAttributes() & (~PA_4MBYTE);
         do {
-            size_t size = dir.getEntrySize(endAddr);
+            size_t size = AddressSpaceImpl::getPageSize();
             phys += size;
             endAddr += size;
             PageTableBase& endEntry = dir.getEntry(endAddr);
@@ -820,38 +894,16 @@ void AddressSpace::dump() {
 
 void AddressSpace::map(const void* virt, const void* phys, size_t size,
     bool write, bool user) {
-    assert(aligned(size) && aligned(virt) && aligned(phys));
-    pageAttributes_e attr = PA_PRESENT;
-    if (write) {
-        attr = attr | PA_WRITABLE;
-    }
-    if (user) {
-        attr = attr | PA_RING0;
-    }
+    assert(false);
+    assert(AddressSpaceImpl::aligned(size) &&
+        AddressSpaceImpl::aligned(virt) &&
+        AddressSpaceImpl::aligned(phys));
     PageDirectory& dir = *(PageDirectory*)this;
     while (size != 0) {
-        // The virtually mapped memory is mapped as globally available. It will
-        // be mapped by all threads to the same memory area to be accessible
-        // from all threads. Marking it as globally available leads into
-        // increased access speed, as the corresponding mapping entries don't
-        // need to be updated on task switches.
-        pageAttributes_e cattr;
-        if (virt >= &KERNEL_CODE) {
-            cattr = attr | PA_GLOBAL;
-        } else {
-            cattr = attr;
-        }
         PageDirEntry& dirEntry = dir[virt];
-        size_t pageSize;
-        if (size >= LARGEPAGESIZE && alignedlarge(virt) && alignedlarge(phys)) {
-            assert(dirEntry.isEmpty());
-            dirEntry.set(phys, cattr | PA_4MBYTE);
-            pageSize = LARGEPAGESIZE;
-        } else {
-            assert(!dirEntry.isEmpty());
-            pageSize = PAGESIZE;
-            dirEntry[virt].set(phys, cattr);
-        }
+        assert(!dirEntry.isEmpty());
+        size_t pageSize = AddressSpaceImpl::getPageSize();
+        dirEntry[virt].set(phys, getAttributes(virt, write, user));
         virt = (char*)virt + pageSize;
         phys = (char*)phys + pageSize;
         size -= pageSize;
@@ -918,72 +970,9 @@ void AddressSpace::map(const void* virt, const void* phys, size_t size,
 //}
 
 void AddressSpace::adjustTableAddresses() {
-    PageDirectory& dir = *(PageDirectory*)this;
-    size_t entryCount = sizeof(PageDirectory) / sizeof(PageTableEntry);
-    for (size_t i = 0; i < entryCount; i++) {
-        dir[i].adjustAddress();
-    }
-}
-
-void AddressSpace::load() {
-    asm(
-        "movl   %%eax, %%cr3" : :
-        "a"(this)
-    );
-}
-
-void AddressSpace::enablePaging() {
-    // set bits 31 and 16 in cr0 to enable paging and to turn on the
-    // evaluation of access rights
-    asm(
-        "movl   %%cr0, %%eax\r\n"
-        "orl    $0x80010000, %%eax\r\n"
-        "movl   %%eax, %%cr0\r\n" : :
-    );
-    // load the global descriptor table
-    asm(
-        "pushl  %%eax\r\n"
-        "pushw  %%bx\r\n"
-        "lgdt   (%%esp)\r\n"
-        "addl   $6, %%esp\r\n" : :
-        "a"(&GDT), "b"(sizeof(GDT) - 1)
-    );
-    // initialize segment registers and set instruction pointer to the new
-    // kernel area
-    asm(
-        "ljmpl  $010, $_loadCs\r\n"
-        "_loadCs:\r\n"
-        "movw   $020, %%ax\r\n"
-        "movw   %%ax, %%ds\r\n"
-        "movw   %%ax, %%es\r\n"
-        "movw   %%ax, %%fs\r\n"
-        "movw   %%ax, %%gs\r\n"
-        "movw   %%ax, %%ss\r\n" : :
-    );
-}
-
-void AddressSpace::adjustStack() {
-    uint32_t delta = &KERNEL_CODE - &PHYSICAL_ADDR;
-    // adjust the stack pointer
-    asm(
-        "addl   %%eax, %%esp\r\n"
-        "addl   %%eax, %%ebp\r\n" : :
-        "a"(delta)
-    );
-    // adjust the pointers saved to the stack
-    uint32_t* stack;
-    asm(
-        "movl   %%ebp, %%eax\r\n" :
-        "=a"(stack)
-    );
-    while ((void*)stack < &STACK) {
-        uint32_t value = *stack + delta;
-        *stack = value;
-        stack = (uint32_t*)value;
-        uint32_t* programCounter = stack + 1;
-        *programCounter += delta;
-    }
+    adjustTableAddresses<PageDirectory>(*this);
 }
 
 /*
 */
+#endif

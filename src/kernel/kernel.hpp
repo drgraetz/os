@@ -34,6 +34,7 @@ template <typename T, size_t N> constexpr size_t arraySize(const T (&)[N]) {
 ////extern "C" void* memcpy(void*, const void*, size_t);
 extern "C" void* memset(void* ptr, int value, size_t byteCount);
 
+#ifdef X
 ///**
 // * Loads an ELF file from a stream.
 // */
@@ -99,7 +100,7 @@ typedef enum {
  * The errorcode of the last OS operation.
  */
 extern errno_e errno;
-
+#endif
 /**
  * Contains the code for controlling the UART chip. The UART chip is used for
  * debug messages, if compiled with the VERBOSE symbol.
@@ -139,6 +140,96 @@ static inline bool valid(const void* ptr) {
 template<class C> static inline C* invalidPtr() {
 	return (C*)-1;
 }
+
+/**
+ * An entry within a page table, as it is used by the memory management unit.
+ */
+class PageTableEntry {
+private:
+    /**
+     * The value of this. Typically, only the most significant 9 to 12 bits
+     * are used as a pointer. The least significant bits are used as attribute
+     * bits. The implementation is highly hardware specific.
+     */
+    uintptr_t data;
+public:
+    /**
+     * @return true, if this describes an empty entry.
+     */
+    bool isEmpty();
+    /**
+     * @return the physical address, which this points to.
+     */
+    void* getPhysicalAddress();
+    /**
+     * Sets the physical address, which this points to.
+     */
+    void setPhysicalAddress(const void* value);
+    /**
+     * Initializes this. This must be empty.
+     */
+    void set(
+        const void* physAddr,   ///< The physical address of the memory block.
+                                ///< Must be aligned to a page boundary.
+        bool writable,          ///< Defines, whether write access is allowed.
+        bool userAccess,        ///< Defines, whether user code may access the
+                                ///< memory area.
+        bool global,            ///< If true, the memory block is marked as
+                                ///< globally accessible, i.e. the entry is not
+                                ///< cleared when a new address space is loaded
+                                ///< into the MMU.
+        size_t level            ///< The level of the paging table this resides
+                                ///< in.
+    );
+};
+
+/**
+ * An array, which can be safely accessed. Checks for index overflows and
+ * index overflows are performed if compiled in VERBOSE mode.
+ */
+template<typename t> class SafeArray {
+private:
+    /**
+     * The first element of this.
+     */
+    t* start;
+    /**
+     * The number of entries in this.
+     */
+    size_t count;
+public:
+    /**
+     * Constructs this from a pointer to the first entry and the number of
+     * entries.
+     */
+    SafeArray(t* start, size_t count) :
+        start(start),
+        count(count) { }
+    /**
+     * Constructs an empty array to an invalid pointer.
+     */
+    SafeArray() :
+        SafeArray(invalidPtr<t>(), 0) { }
+    /**
+     * The begin of an iteration.
+     */
+    t* begin() {
+        return start;
+    }
+    /**
+     * The end of an iteration.
+     */
+    t* end() {
+        return start + count;
+    }
+    /**
+     * Gets an item of this.
+     */
+    t& operator[](size_t index) {
+        assert(index < count);
+        return start[index];
+    }
+};
 
 /**
  * A virtual address space. Dr.Grätz OS requires a memory management unit on
@@ -218,17 +309,21 @@ private:
      */
     static char STACK;
     /**
+     * The number of address bits represented by each level of a paging table.
+     * Terminated by 0.
+     */
+    static const int ADDRESSBITSPERLEVEL[];
+    /**
+     * Returns an adjusted pointer to @ref ADDRESSBITSPERLEVEL, which is
+     * accessible regardless of whether paging has been enabled or not.
+     */
+    static const int* getAddressBitsPerLevel();
+    /**
      * The type independent implementation of @ref getPhysicalAddress
      */
     static void* getPhysicalAddressImpl(
         const void* virtAddr
     );
-    /**
-     * Adjust the addresses of the second level tables. This is required for
-     * the @ref kernel address space, as for it tables are defined in the
-     * virtual address space of the kernel.
-     */
-    void adjustTableAddresses();
     /**
      * Maps the kernel to a virtual address.
      */
@@ -249,6 +344,10 @@ private:
      */
     static void enablePaging();
     /**
+     * Returns true, if paging has been enabled.
+     */
+    static bool isPagingEnabled();
+    /**
      * Adjusts the stack from the physical addresses used during the boot to
      * the virtual addresses used by the kernel. The pointers residing on the
      * stack are also adjusted.
@@ -258,6 +357,17 @@ private:
      * exist or contains uninitalized data.
      */
     static void adjustStack();
+    /**
+     * Adjust the addresses of data entries. This is required for page tables,
+     * which are predefined by the kernel code, such as the
+     * @ref AddressSpace::kernel . Kernel code is defined in the virtual
+     * address space but page tables need to refer to physical addresses.
+     */
+    void adjustTableAddresses();
+    /**
+     * Gets an array to the paging directory.
+     */
+    SafeArray<PageTableEntry> getPagingDirectory();
 public:
     /**
      * Maps a virtual memory block to a physical memory block. If the virtual
@@ -323,7 +433,15 @@ public:
      */
     template<class C> static inline C* getPhysicalAddress(
         const C* virtAddr   ///< The virtual address, which will be translated.
-    ) { return (C*)getPhysicalAddressImpl(virtAddr); }
+    ) {
+        return (C*)getPhysicalAddressImpl(virtAddr);
+    }
+    /**
+     * Returns whether a given address points into the virtually mapped kernel.
+     */
+    static inline bool inKernel(const void* ptr) {
+        return ptr >= &KERNEL_CODE;
+    }
 };
 
 ///**
