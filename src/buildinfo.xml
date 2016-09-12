@@ -4,41 +4,43 @@
 <build-info>
 
     
-	<platform name='i386' target-triplet='i686-elf' cpu='i386'
-		compiler-params=''
-		qemu='qemu-system-i386' qemu-params=''>
-		<linker-symbol name='bootAddr' value='0x00100000'/>
-		<linker-symbol name='kernelAddr' value='0xFFC00000'/>
+    <platform name='i386' target-triplet='i686-elf' cpu='i386'
+        compiler-params=''
+        qemu='qemu-system-i386' qemu-params=''>
+        <linker-symbol name='bootAddr' value='0x00100000'/>
+        <linker-symbol name='kernelAddr' value='0xFFC00000'/>
         <linker-symbol name='pageSize' value='4096'/>
-	</platform>
-	
-	<!-- mfpu=vfp -->
-	<platform name='rpi' target-triplet='arm-elf-eabi' cpu='arm1176jzf-s'
-		compiler-params='-mfloat-abi=hard'
-		qemu='qemu-system-arm' qemu-params='-M raspi -cpu arm1176 -m 256'>
+    </platform>
+    
+    <!-- mfpu=vfp -->
+    <platform name='rpi' target-triplet='arm-elf-eabi' cpu='arm1176jzf-s'
+        compiler-params='-mfloat-abi=hard'
+        qemu='qemu-system-arm' qemu-params='-M raspi -cpu arm1176 -m 256'>
         <linker-symbol name='bootAddr' value='0x00008000'/>
         <linker-symbol name='kernelAddr' value='0xFFF08000'/>
         <linker-symbol name='pageSize' value='4096'/>
-	</platform>
-	
-	<signature uri='llvm.org' public-key='02119294' extension='.sig'/>
-	<signature uri='ftp.gnu.org/gnu' key-ring='https://ftp.gnu.org/gnu/gnu-keyring.gpg' extension='.sig'/>
+    </platform>
+    
+    <signature uri='llvm.org' public-key='02119294' extension='.sig'/>
+    <signature uri='ftp.gnu.org/gnu' key-ring='https://ftp.gnu.org/gnu/gnu-keyring.gpg' extension='.sig'/>
 
-	<tool name='clang'>
-		<!-- required on Cygwin, as otherwise the number of segments exceeds the permitted maximum -->
-		<env variable='CXXFLAGS' value='-Og'/>
-		<package url='http://llvm.org/releases/3.8.1/llvm-3.8.1.src.tar.xz'>
-			<sub-package url='http://llvm.org/releases/3.8.1/cfe-3.8.1.src.tar.xz' dir='tools/clang'/>
-		</package>
-	</tool>
-	
-	<tool name='binutils' target-dependent='true'>
-		<package url='https://ftp.gnu.org/gnu/binutils/binutils-2.26.tar.bz2'/>
-		<executable name='ld'/>
-	</tool>
-	
-	<tool name='gdb' target-dependent='true'>
-	   <package url='https://ftp.gnu.org/gnu/gdb/gdb-7.11.tar.xz'/>
-	</tool>
+    <tool name='clang'>
+        <!-- required on Cygwin, as otherwise the number of segments exceeds the permitted maximum -->
+        <env variable='CXXFLAGS' value='-Og'/>
+        <package url='http://llvm.org/releases/3.8.1/llvm-3.8.1.src.tar.xz'>
+            <sub-package url='http://llvm.org/releases/3.8.1/cfe-3.8.1.src.tar.xz' dir='tools/clang'/>
+        </package>
+    </tool>
+    
+    <tool name='binutils' target-dependent='true'>
+        <package url='https://ftp.gnu.org/gnu/binutils/binutils-2.26.tar.bz2'/>
+        <executable name='ld'/>
+    </tool>
+    
+    <tool name='gdb' target-dependent='true'>
+       <package url='https://ftp.gnu.org/gnu/gdb/gdb-7.11.tar.xz'/>
+    </tool>
+    
+    <spec url='https://www.raspberrypi.org/wp-content/uploads/2012/02/BCM2835-ARM-Peripherals.pdf'/>
 
 </build-info>

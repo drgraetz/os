@@ -1,5 +1,5 @@
 <!-- The root element of buildinfo.xml -->
-<!ELEMENT build-info (platform+,signature*,tool*)>
+<!ELEMENT build-info (platform+,signature*,tool*,spec*)>
 
 <!-- The definition of a target platform. A platform is referenced by
      its _name_.
@@ -25,8 +25,8 @@
 	 -defsym command line option -->
 <!ELEMENT linker-symbol EMPTY>
 <!ATTLIST linker-symbol
-	name				CDATA			#REQUIRED
-	value				CDATA			#REQUIRED>
+    name                CDATA           #REQUIRED
+    value               CDATA           #REQUIRED>
 
 <!-- The definition of a signature. A signature is valid for an URI and all
      sub-URIs. It uses a public-key (which is downloaded using gpg -key-recv)
@@ -35,10 +35,10 @@
      URL of the signed file.-->
 <!ELEMENT signature EMPTY>
 <!ATTLIST signature
-	uri					CDATA			#REQUIRED
-	public-key			CDATA			#IMPLIED
-	key-ring			CDATA			#IMPLIED
-	extension			CDATA			#REQUIRED>
+    uri                 CDATA           #REQUIRED
+    public-key          CDATA           #IMPLIED
+    key-ring            CDATA           #IMPLIED
+    extension           CDATA           #REQUIRED>
 
 <!-- The definition of a 3rd party tool. A third party tool is identified by
 	 its name and consists of one or multiple packets. It may be
@@ -62,7 +62,7 @@
 	 from a given URL. It may contain sub-packages. -->
 <!ELEMENT package (sub-package*)>
 <!ATTLIST package
-	url					CDATA			#REQUIRED>
+    url                 CDATA           #REQUIRED>
 
 <!-- The definition of a software sub-package, which is downloaded on demand
 	 from a given URL into a directory of the unpackaged main-package. It
@@ -75,5 +75,10 @@
 <!-- The definition of an environment variable with its value. -->
 <!ELEMENT env EMPTY>
 <!ATTLIST env
-	variable			CDATA			#REQUIRED
-	value				CDATA			#REQUIRED>
+    variable            CDATA           #REQUIRED
+    value               CDATA           #REQUIRED>
+
+<!-- The definition of a single specification file -->
+<!ELEMENT spec EMPTY>
+<!ATTLIST spec
+    url                 CDATA           #REQUIRED>

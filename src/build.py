@@ -83,6 +83,7 @@ class _Directory:
         _Directory.doc = _Directory.base.enforce("doc", True)
         _Directory.bin = _Directory.base.enforce("bin", _CommandLine.rebuild)
         _Directory.tool = _Directory.base.enforce("tools")
+        _Directory.specs = _Directory.base.enforce("specs")
      
      
     ##
@@ -407,7 +408,28 @@ def _needs_update(result: str, input_files_and_times: list) -> bool:
       return True
    return getmtime(result) < __get_latest(input_files_and_times)
   
-  
+
+##
+# Downloads an url to a local file.
+def _download(url_str: str, output_file: str) -> None:
+    from logging import info, warning
+    from os.path import basename, isfile
+    from urllib.request import urlopen
+    from urllib.parse import urlparse
+    url = urlparse(url_str)
+    with _TempFile(output_file) as tmp:
+        if not tmp.exists:
+            info("downloading " + url_str)
+            if url.scheme != "https":
+                warning("protocol of " + url_str + " is not secured; consider using https instead")
+            source = urlopen(url_str)
+            while True:
+                data = source.read(4096)
+                if len(data) == 0:
+                    break
+                tmp.write(data)
+
+
 ##
 # Invokes a command line (a list of arguments, where the argument indexed with
 # zero is the command).
@@ -697,6 +719,7 @@ class _BuildInfo:
     __doc = None
     __platforms = {}
     __signatures = []
+    __specifications = []
     
     
     ##
@@ -989,7 +1012,7 @@ class _BuildInfo:
             else:
                 unpacked = False
             if not unpacked:
-                archive = _BuildInfo._download(self.__url)
+                archive = _BuildInfo._download_repo(self.__url)
                 _BuildInfo._verify(self.__url, archive)
                 _BuildInfo.Package.__untar(archive, output_dir)
                 file = open(unpack_list, "a")
@@ -1157,29 +1180,27 @@ class _BuildInfo:
                 _Directory.logs.enforce(dirname(dst))
                 rename(log, dst)
          
-         
+    
     ##
-    # Downloads an URL to "tools/src".
+    # A third party specification file, which is downloaded on demand.
+    class Specification:
+        def __init__(self, xml):
+            self.__url = xml.get("url")
+        
+        ##
+        # The url of this.
+        @property
+        def url(self) -> str:
+            return self.__url
+    
+    
+    ##
+    # Downloads an URL to "tools/repos".
     @staticmethod
-    def _download(url_str: str) -> str:
-        from logging import info, warning
-        from os.path import basename, isfile
-        from urllib.request import urlopen
-        from urllib.parse import urlparse
-        url = urlparse(url_str)
-        output_file = _Directory.tool.enforce("repos").join(basename(url.path))
-        with _TempFile(output_file) as tmp:
-            if not tmp.exists:
-                info("downloading " + url_str)
-                if url.scheme != "https":
-                    warning("protocol of " + url_str + " is not secured; consider using https instead")
-                source = urlopen(url_str)
-                while True:
-                    data = source.read(4096)
-                    if len(data) == 0:
-                        break
-                    tmp.write(data)
-        return output_file
+    def _download_repo(url: str) -> str:
+        result = _Directory.tool.enforce("repos").join(basename(url.path))
+        _download(url, result)
+        return result
     
     
     ##
@@ -1213,6 +1234,7 @@ class _BuildInfo:
         _BuildInfo._create("platform", _BuildInfo.Platform, _BuildInfo.__platforms, _BuildInfo.__doc)
         _BuildInfo._create("tool", _BuildInfo.Tool, None, _BuildInfo.__doc)
         _BuildInfo._create("signature", _BuildInfo.Signature, _BuildInfo.__signatures, _BuildInfo.__doc)
+        _BuildInfo._create("spec", _BuildInfo.Specification, _BuildInfo.__specifications, _BuildInfo.__doc)
     
     
     ##
@@ -1238,6 +1260,14 @@ class _BuildInfo:
 
 
     ##
+    # Returns a list of all specification files, which shall be downloaded to
+    # the 'specs/' directory
+    @staticmethod
+    def get_specifications() -> _ReadOnlyList:
+        return _ReadOnlyList(_BuildInfo.__specifications)
+
+
+    ##
     # Invoke GPG
     @staticmethod
     def __gpg(parameters: list) -> None:
@@ -1259,13 +1289,13 @@ class _BuildInfo:
         for candidate in _BuildInfo.__signatures:
             if not uri.startswith(candidate.uri):
                 continue
-            signature = _BuildInfo._download(url.scheme + "://" + uri + candidate.extension)
+            signature = _BuildInfo._download_repo(url.scheme + "://" + uri + candidate.extension)
             if candidate.public_key is not None:
                 _BuildInfo.__gpg(["--keyserver", "pgp.mit.edu", "--recv-keys", candidate.public_key])
             if candidate.key_ring is None:
                 keyring = []
             else:
-                keyfile = _BuildInfo.get_gpg_dir().rel_path(_BuildInfo._download(candidate.key_ring))
+                keyfile = _BuildInfo.get_gpg_dir().rel_path(_BuildInfo._download_repo(candidate.key_ring))
                 keyring = ["--keyring", keyfile]
             _BuildInfo.__gpg(keyring + ["--verify", _BuildInfo.get_gpg_dir().rel_path(signature)])
             return
@@ -1472,6 +1502,13 @@ def __makeTool(platform: _BuildInfo.Platform, generatedFiles: list) -> None:
     _BuildInfo.Tool.get(_CommandLine.makeTool, platform.target)
 
 
+def __download_specifications() -> None:
+    from os.path import basename
+    for spec in _BuildInfo.get_specifications():
+        output_file = _Directory.specs.join(basename(spec.url))
+        _download(spec.url, output_file)
+
+
 _CommandLine.evaluate()
 __init_logging()
 _Directory.__static_init__()
@@ -1481,3 +1518,4 @@ if _CommandLine.makeTool is None:
     _Directory.bin.erase_contents(result)
 else:
     _BuildInfo.invokeForAllPlatforms([__makeTool])
+__download_specifications()
