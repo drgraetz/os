@@ -1,5 +1,13 @@
 #include "kernel.hpp"
 
+/**
+ * @file
+ *
+ * The armv7-specific implementation of the @ref AddressSpace class.
+ *
+ * @author Dr. Florian M. Grätz
+ */
+
 void AddressSpace::load() {
     assert(false);
 }

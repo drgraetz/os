@@ -1,5 +1,13 @@
 #include "kernel.hpp"
 
+/**
+ * @file
+ *
+ * The architecture-independent implementation of the @ref AddressSpace class.
+ *
+ * @author Dr. Florian M. Grätz
+ */
+
 void AddressSpace::map(const void* virt, const void* phys, size_t size,
     bool write, bool user) {
     printf("AddressSpace::map(%p, %p, %u, %u, %u) @ %p\r\n", virt, phys, size, write, user, this);

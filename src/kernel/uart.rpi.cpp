@@ -4,6 +4,14 @@
 #include "kernel.hpp"
 
 /**
+ * @file
+ *
+ * The armv7-specific implementation of the @ref uart namespace.
+ *
+ * @author Dr. Florian M. Grätz
+ */
+
+/**
  * The GPIO base port for the raspberry pi. The addresses of the peripherals
  * start at 0x20000000 for the BCM2708 (would be 0x3F000000 for the raspberry
  * pi 2). The GPI header is located at the position 0x200000 within the

@@ -1,6 +1,13 @@
 #ifndef __KERNEL_HPP
 #define __KERNEL_HPP
 
+/**
+ * @file
+ *
+ * The definitions required for the kernel.
+ *
+ * @author Dr. Florian M. Grätz
+ */
 #include <stdint.h>
 
 /**
@@ -10,32 +17,21 @@
 struct boot_data_s;
 
 /**
- * @file
- * The symbol definitions for the kernel.
- *
- * @author Dr. Florian Manfred Grätz
- */
-
-/**
  * The definition of a publicly visible declaration, accessible from C code.
  */
 #define CDECL   extern "C"
 
-///**
-// * Yields to the lesser of two values.
-// */
-//#define min(a, b)           (((a) < (b)) ? (a) : (b))
 /**
  * Yields to number of elements in an array.
  */
 template <typename T, size_t N> constexpr size_t arraySize(const T (&)[N]) {
     return N;
 }
-////extern "C" void* memcpy(void*, const void*, size_t);
+//extern "C" void* memcpy(void*, const void*, size_t);
 extern "C" void* memset(void* ptr, int value, size_t byteCount);
 
 #ifdef X
-///**
+///* *
 // * Loads an ELF file from a stream.
 // */
 //errno_e loadElf(Stream& stream);
@@ -241,7 +237,7 @@ public:
  */
 class AddressSpace {
 //	typedef char MemPage[4096];
-//    /**
+//    /* *
 //     * Unmaps a virtual memory block. The memory area does not need to be
 //     * mapped.
 //     *
@@ -255,7 +251,7 @@ class AddressSpace {
 //                                ///< unmapped. Must be a multiple of the page
 //                                ///< size.
 //    );
-//    /**
+//    /* *
 //     * Resolves a physical address into a virtual address. If the address has
 //     * been mapped multiple times, the last entry is returned.
 //     *
@@ -265,7 +261,7 @@ class AddressSpace {
 //    void* getVirtualAddress(
 //        const void* physAddr    ///< The physical address, which is resolved.
 //    );
-//    /**
+//    /* *
 //     * Creates a new address space.
 //     *
 //     * @return The newly created address space or INVALID_PTR, if it could
@@ -428,7 +424,7 @@ public:
     /**
      * Resolves a virtual address into a physical address.
      *
-     * @return The requested physical address or @ref INVALID_PTR, if the
+     * @return The requested physical address or @ref invalidPtr, if the
      * address has not been mapped to physical memory.
      */
     template<class C> static inline C* getPhysicalAddress(
@@ -444,12 +440,12 @@ public:
     }
 };
 
-///**
+///* *
 // * The kernel's memory management functionality.
 // */
 //class MemoryManager {
 //public:
-//    /**
+//    /* *
 //     * Marks a memory page as being free. This method should only be invoked
 //     * during the initialization phase of the kernel, i.e. prior to a call of
 //     * @ref kmain()
@@ -461,11 +457,11 @@ public:
 //                            ///< significantly increased, which may come in
 //                            ///< handy on some later 32 bit intel machines.
 //    );
-//    /**
+//    /* *
 //     * Returns the number of free memory pages.
 //     */
 //    static uint32_t getFreePagesCount();
-//    /**
+//    /* *
 //     * Allocates a new page of memory.
 //     *
 //     * @return the index of the newly allocated memory page or -1, if no free
@@ -479,8 +475,8 @@ public:
 
 /**
  * The entry function to the kernel. This function is implemented in the file
- * boot.*.S, where * stands for the target platform. The entry function
- * performs the following operations:
+ * boot. _platform_ .S. The entry function performs the following operations:
+ *
  * - validate, that the boot process has been completed successfully
  * - initialize the kernel's stack
  * - invoke @ref kmain(struct boot_data_s&)

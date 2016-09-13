@@ -3,7 +3,7 @@
 /**
  * @file
  *
- * The i386-specific implementation of the address mangement.
+ * The i386-specific implementation of the @ref AddressSpace class.
  *
  * @author Dr. Florian Manfred Grätz
  */

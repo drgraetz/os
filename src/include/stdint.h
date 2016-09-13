@@ -1,6 +1,14 @@
 #ifndef __STDINT_H
 #define __STDINT_H
 
+/**
+ * @file
+ *
+ * Dr Grätz OS's implementation of stdint.h. For a description of the symbols
+ * contained please refer to
+ * <http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/stdint.h.html>
+ */
+
 #ifdef __cplusplus
 extern "C" {
 #endif

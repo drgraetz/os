@@ -1,6 +1,14 @@
 #include "kernel.hpp"
 
 /**
+ * @file
+ *
+ * The armv7-specific implementation of the @ref PageTableEntry class.
+ *
+ * @author Dr. Florian M. Grätz
+ */
+
+/**
  * The attribute definition for a memory page.
  */
 typedef enum {

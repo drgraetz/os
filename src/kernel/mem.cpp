@@ -3,7 +3,7 @@
 /**
  * @file
  *
- * Implements the kernel's memory functioniality.
+ * Implements the kernel's memory functionality.
  *
  * @author Dr. Florian M. Grätz
  */

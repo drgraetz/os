@@ -3,21 +3,21 @@
 /**
  * @file
  *
- * Holds the kernel's main function.
+ * The kernel's @ref kmain function.
  */
 
-///**
+///* *
 // * The start of the list of module initializers. See @ref initModules() for
 // * details. This symbols is defined by the linker script.
 // */
 //extern "C" void(*__CTOR_LIST__)();
-///**
+///* *
 // * The end of the list of module initializers. See @ref initModules() for
 // * details. This symbol is defined by the linker script.
 // */
 //extern "C" void(*__CTOR_END__)();
 //
-///**
+///* *
 // * Invokes all module initializers. This step is necessary, as no C runtime
 // * library is available for the kernel. The linker scripts defines the start
 // * and the end of the list of initializers. The list of initializers is an

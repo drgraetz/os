@@ -646,8 +646,9 @@ class _CommandLine:
     max_line_width = 79
     use_color = True
     rebuild = False
-    createAssemblerFiles = False
-    makeTool = None
+    create_assembler_files = False
+    make_tool = None
+    create_documentation = True
      
     @staticmethod
     def evaluate() -> None:
@@ -667,10 +668,12 @@ class _CommandLine:
                 elif current == "--rebuild":
                     _CommandLine.rebuild = True
                 elif current == "--asm":
-                    _CommandLine.createAssemblerFiles = True
+                    _CommandLine.create_assembler_files = True
                 elif current == "--maketool":
-                    _CommandLine.makeTool = argv[i]
+                    _CommandLine.make_tool = argv[i]
                     i += 1
+                elif current == "--doc":
+                    _CommandLine.create_documentation = True
                 else:
                     raise ValueError("Invalid command line option.")
             except Exception as e:
@@ -693,24 +696,24 @@ class _CommandLine:
         print("--rebuild             rebuild all binaries rather than an incremental build")
         print("--asm                 create intermediate assembler files")
         print("--maketool name       make a certain tool defined in buildinfo.xml")
+        print("--doc                 create doxygen documentation")
         exit()
       
       
-# # ##
-# # # Creates the doxygen documentation. Logs a warning, if doxygen is not
-# # # installed. The file "src/doxygen.config" is used as doxygen configuration.
-# # @_Target
-# # def __doc() -> None:
-# #    """Create the doxgen documentation."""
-# #    from logging import info, warning
-# #    info("creating documentation")
-# #    _erase(_doc_dir, [_doc_dir])
-# #    try:
-# #       _invoke(["doxygen", "src/doxygen.config"])
-# #    except FileNotFoundError as e:
-# #       warning("doxygen not installed - no documentation generated")
-# # 
-# # 
+##
+# Creates the doxygen documentation. Logs a warning, if doxygen is not
+# installed. The file "src/doxygen.config" is used as doxygen configuration.
+def __doc() -> None:
+   """Create the doxgen documentation."""
+   from logging import info, warning
+   info("creating documentation")
+   _Directory.doc.erase_contents([])
+   try:
+      _invoke(["doxygen", "src/doxygen.config"])
+   except FileNotFoundError as e:
+      warning("doxygen not installed - no documentation generated")
+ 
+ 
   
   
 ##
@@ -1421,7 +1424,7 @@ def __compile(platform: _BuildInfo.Platform, generated_files: _ReadOnlyList) -> 
             command_line += ["--std=c++11"]
         for include in platform.include_dirs:
             command_line += ["-I", include.path]
-        if ext == ".S" or _CommandLine.createAssemblerFiles:
+        if ext == ".S" or _CommandLine.create_assembler_files:
             assembler_file = splitext(output_file)[0] + ".s"
             result += [assembler_file]
             command_line += ["-o", assembler_file]
@@ -1429,10 +1432,10 @@ def __compile(platform: _BuildInfo.Platform, generated_files: _ReadOnlyList) -> 
             command_line += ["-o", output_file]
         if ext == ".S":
             command_line += ["-E"]
-        if _CommandLine.createAssemblerFiles and ext != ".S":
+        if _CommandLine.create_assembler_files and ext != ".S":
             command_line += ["-S"]
         _invoke(command_line)
-        if ext == ".S" or _CommandLine.createAssemblerFiles:
+        if ext == ".S" or _CommandLine.create_assembler_files:
             command_line = [
                 assembler,
                 assembler_file,
@@ -1498,8 +1501,8 @@ def _get_paths_from_tree(tree: dict) -> list:
     return result
 
 
-def __makeTool(platform: _BuildInfo.Platform, generatedFiles: list) -> None:
-    _BuildInfo.Tool.get(_CommandLine.makeTool, platform.target)
+def __make_tool(platform: _BuildInfo.Platform, generatedFiles: list) -> None:
+    _BuildInfo.Tool.get(_CommandLine.make_tool, platform.target)
 
 
 def __download_specifications() -> None:
@@ -1512,10 +1515,12 @@ def __download_specifications() -> None:
 _CommandLine.evaluate()
 __init_logging()
 _Directory.__static_init__()
-if _CommandLine.makeTool is None:
+if _CommandLine.make_tool is None:
     result = _BuildInfo.invokeForAllPlatforms([__compile, __link, __test])
     _Directory.obj.erase_contents(result)
     _Directory.bin.erase_contents(result)
 else:
-    _BuildInfo.invokeForAllPlatforms([__makeTool])
+    _BuildInfo.invokeForAllPlatforms([__make_tool])
+if _CommandLine.create_documentation:
+    __doc()
 __download_specifications()
