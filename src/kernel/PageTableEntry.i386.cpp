@@ -51,9 +51,9 @@ void PageTableEntry::setPhysicalAddress(const void* addr) {
 
 void PageTableEntry::set(const void* addr, bool write, bool user, bool global,
     size_t level) {
-    uintptr_t value = (uintptr_t)value | PA_PRESENT;
     assert(isEmpty());
-    assert((value & 0xFFFFF000) == value);
+    assert(((uintptr_t)addr & 0xFFFFF000) == (uintptr_t)addr);
+    uintptr_t value = (uintptr_t)addr | PA_PRESENT;
     if (global) {
         value |= PA_GLOBAL;
     }

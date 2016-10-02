@@ -35,6 +35,7 @@
     <tool name='binutils' target-dependent='true'>
         <package url='https://ftp.gnu.org/gnu/binutils/binutils-2.26.tar.bz2'/>
         <executable name='ld'/>
+        <executable name='as'/>
     </tool>
     
     <tool name='gdb' target-dependent='true'>

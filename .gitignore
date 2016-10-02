@@ -28,6 +28,9 @@
 *.out
 *.app
 
+# Archives
+*.zip
+
 # Artefact directories
 /logs/
 /doc/

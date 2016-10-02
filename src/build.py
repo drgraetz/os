@@ -61,9 +61,16 @@ class _Directory:
     
     ##
     # Appends the path of this
-    def join(self, *args):
+    def join(self, *args) -> str:
         from os.path import join
         return join(self.__path, *args)
+    
+    
+    ##
+    # Sets the access rights to this
+    def chmod(self, flags: int) -> None:
+        from os import chmod
+        chmod(self.__path, flags)
      
      
     ##
@@ -84,8 +91,9 @@ class _Directory:
         _Directory.bin = _Directory.base.enforce("bin", _CommandLine.rebuild)
         _Directory.tool = _Directory.base.enforce("tools")
         _Directory.specs = _Directory.base.enforce("specs")
-     
-     
+        _Directory.PATH = "/bin:/usr/local/bin"
+
+        
     ##
     # Creates a log file in the "logs" directory named like the executable.
     def __create_log_file(self):
@@ -516,8 +524,8 @@ def _invoke(command_line: list, working_dir: _Directory=None, env: dict = {}) ->
     # stdin, stdout, stderr
     environment = dict(env)
     environment.update({
-        "PATH": environ["PATH"],
-        "LANG": "en_EN.UTF-8"
+        "PATH": _Directory.PATH,
+        "LANG": "en_US.UTF-8"
     })
     command_line_str = ">"
     for element in command_line:
@@ -526,10 +534,10 @@ def _invoke(command_line: list, working_dir: _Directory=None, env: dict = {}) ->
     debug(command_line_str.strip())
     with __ProcessLogger(DEBUG) as out_logger:
         with __ProcessLogger(ERROR) as err_logger:
-            check_call(command_line, \
-                cwd=working_dir.path, \
-                env=environment, \
-                stdout = out_logger.out, \
+            check_call(command_line,
+                cwd=working_dir.path,
+                env=environment,
+                stdout = out_logger.out,
                 stderr = err_logger.out)
   
   
@@ -647,9 +655,12 @@ class _CommandLine:
     use_color = True
     rebuild = False
     create_assembler_files = False
-    make_tool = None
-    create_documentation = True
-     
+    create_documentation = False
+    download_specifications = False
+    test = False
+    skip_verification = False
+    zip_archive = None
+    
     @staticmethod
     def evaluate() -> None:
         from sys import argv
@@ -669,11 +680,20 @@ class _CommandLine:
                     _CommandLine.rebuild = True
                 elif current == "--asm":
                     _CommandLine.create_assembler_files = True
-                elif current == "--maketool":
-                    _CommandLine.make_tool = argv[i]
-                    i += 1
                 elif current == "--doc":
                     _CommandLine.create_documentation = True
+                elif current == "--spec":
+                    _CommandLine.download_specifications = True
+                elif current == "--test":
+                    _CommandLine.test = True
+                elif current == "--skip-verification":
+                    _CommandLine.skip_verification = True
+                elif current == "--zip":
+                    if i < len(argv) and not argv[i].startswith("-"):
+                        _CommandLine.zip_archive = argv[i]
+                        i += 1
+                    else:
+                        _CommandLine.zip_archive = "."
                 else:
                     raise ValueError("Invalid command line option.")
             except Exception as e:
@@ -690,13 +710,20 @@ class _CommandLine:
         print("Usage: " + argv[0] + " [options]")
         print()
         print("Valid options are:")
-        print("--help, -?            print this help and exit")
-        print("--no-color            don't use ANSI colors for output")
-        print("--max-line-width x    print a maximum of x characters per line (default value: 79)")
-        print("--rebuild             rebuild all binaries rather than an incremental build")
         print("--asm                 create intermediate assembler files")
-        print("--maketool name       make a certain tool defined in buildinfo.xml")
-        print("--doc                 create doxygen documentation")
+        print("--doc                 create doxygen documentation (requires doxygen)")
+        print("--help, -?            print this help and exit")
+        print("--max-line-width x    print a maximum of x characters per line")
+        print("                      default value: 79")
+        print("--no-color            don't use ANSI colors for output")
+        print("--rebuild             rebuild all binaries rather than an incremental build")
+        print("--skip-verification   skips the verifcation of downloaded sources")
+        print("--spec                download specification files")
+        print("--test                run tests (requires qemu)")
+        print("--zip [archive]       zips all sources into an archive")
+        print("                      if the target archive is a directory, a file named")
+        print("                      dr.grätz-os.zip is created in this directory")
+        print("                      default: current directory")
         exit()
       
       
@@ -706,6 +733,8 @@ class _CommandLine:
 def __doc() -> None:
    """Create the doxgen documentation."""
    from logging import info, warning
+   if not _CommandLine.create_documentation:
+      return
    info("creating documentation")
    _Directory.doc.erase_contents([])
    try:
@@ -991,7 +1020,7 @@ class _BuildInfo:
                 tar.extract(file, output_dir.path)
             roots = _create_tree_from_paths(files)
             if len(roots) == 1:
-                root = output_dir.get(roots.keys()[0])
+                root = output_dir.get(list(roots.keys())[0])
                 for file in root.list_contents():
                     rename(file, output_dir.join(root.rel_path(file)))
                 root.erase_contents([], True)
@@ -1201,7 +1230,8 @@ class _BuildInfo:
     # Downloads an URL to "tools/repos".
     @staticmethod
     def _download_repo(url: str) -> str:
-        result = _Directory.tool.enforce("repos").join(basename(url.path))
+        from os.path import basename
+        result = _Directory.tool.enforce("repos").join(basename(url))
         _download(url, result)
         return result
     
@@ -1274,8 +1304,11 @@ class _BuildInfo:
     # Invoke GPG
     @staticmethod
     def __gpg(parameters: list) -> None:
-        command_line = ["gpg", "--homedir", ".", "--verbose"]
-        _invoke(command_line + parameters, _BuildInfo.get_gpg_dir())
+        from stat import S_IRUSR, S_IWUSR
+        dir = _BuildInfo.get_gpg_dir()
+        dir.chmod(S_IRUSR | S_IWUSR)
+        command_line = ["gpg", "--homedir", dir.path, "--verbose"]
+        _invoke(command_line + parameters, dir)
     
     
     ##
@@ -1285,6 +1318,8 @@ class _BuildInfo:
         from logging import info
         from os.path import basename
         from urllib.parse import urlparse
+        if _CommandLine.skip_verification:
+            return
         _BuildInfo.__read()
         info("verifying " + basename(local_path))
         url = urlparse(url)
@@ -1451,6 +1486,8 @@ def __compile(platform: _BuildInfo.Platform, generated_files: _ReadOnlyList) -> 
 # Test the builds.
 def __test(platform: _BuildInfo.Platform, generated_files: _ReadOnlyList) -> None:
     from logging import info
+    if not _CommandLine.test:
+        return
     info("testing on " + platform.name)
     command_line = [
         platform.qemu,
@@ -1482,10 +1519,15 @@ def _create_tree_from_paths(paths: list) -> dict:
     return result
 
 
+##
+# Converts a file tree into a list of paths. Each key represents a file name
+# and the corresponding values represent a dictionary of underlying files. 
 def _get_paths_from_tree(tree: dict) -> list:
     
     
     def _append(result: list, current: dict, prefix: str) -> None:
+        assert(isinstance(result, list))
+        assert(isinstance(current, dict))
         from os.path import join
         for name in sorted(current.keys()):
             if prefix is None:
@@ -1496,31 +1538,122 @@ def _get_paths_from_tree(tree: dict) -> list:
             _append(result, current[name], path)
     
     
+    assert(isinstance(tree, dict))
     result = []
     _append(result, tree, None)
     return result
 
 
-def __make_tool(platform: _BuildInfo.Platform, generatedFiles: list) -> None:
-    _BuildInfo.Tool.get(_CommandLine.make_tool, platform.target)
-
-
+##
+# Downloads all specifications defined in the buildinfo.xml file into the
+# "specs" folder.
 def __download_specifications() -> None:
     from os.path import basename
+    if not _CommandLine.download_specifications:
+       return
     for spec in _BuildInfo.get_specifications():
         output_file = _Directory.specs.join(basename(spec.url))
         _download(spec.url, output_file)
 
 
+##
+# Checks, whether all prerequisites are fulfilled to run build.py. There is
+# only one exception to the rule: the installation of python3 is not verified,
+# as build.py does not run without it.
+def __check_prerequisites() -> None:
+    from logging import debug, error, info, warning
+    from os import readlink
+    from os.path import dirname, isfile, islink, join, pathsep
+    from subprocess import check_output
+    passed = True
+    info("checking prerequisites")
+    try:
+        import lxml
+        debug("lxml found")
+    except ImportError:
+        passed = False
+        error("lxml not installed")
+    tools = [
+        ["cmake", "cmake", "3.6.2", True],
+        ["gcc", "gcc", "5.4.0", True],
+        ["gnupg", "gpg", "1.4.21", True],
+        ["diffutils", "cmp", "3.5", True],
+        ["doxygen", "doxygen", "1.8.12", False],
+        ["GNU make", "make", "4.2.1", True],
+    ]
+    for tool, executable, version, mandatory in tools:
+        installed = None
+        for dir in _Directory.PATH.split(pathsep):
+            candidate = join(dir, executable)
+            if not isfile(candidate):
+                continue
+            output = check_output([executable, "--version"]).decode("utf-8")
+            installed = output.splitlines()[0].strip().split()[-1]
+        if installed is None:
+            message = tool + " not installed"
+            if mandatory:
+               error(message)
+               passed = False
+            else:
+               warning(message)
+        else:
+            required = tuple(version.split('.'))
+            if tuple(installed.split('.')) < required:
+                message = tool + " version " + version + " required, " + \
+                   installed + " installed"
+                if mandatory:
+                   passed = False
+                   error(message)
+                else:
+                   warning(message)
+            else:
+                debug(tool + " version " + installed + " found")
+    installed = None
+    for path in _Directory.PATH.split(pathsep):
+        executable = join(path, "qemu-system-i386")
+        if not isfile(executable):
+            continue
+        if islink(executable):
+            executable = readlink(executable)
+        version_file = open(join(dirname(executable), "VERSION"))
+        installed = version_file.readline().strip().split()[-1]
+        version_file.close()
+        break
+    if installed is None:
+        warning("qemu not installed")
+    elif tuple(installed.split('.')) < tuple("2.5.94".split('.')):
+        warning("qemu version 2.5.94 reuired, " + installed + " installed")
+
+
+##
+# Packs all source code files into an archive except for the files defined in
+# .gitignore and the .git folder.
+def  __pack_sources() -> None:
+    from logging import info
+    from os import listdir
+    from os.path import isdir, isfile, join
+    from zipfile import ZipFile
+    archive = _CommandLine.zip_archive
+    if archive is None:
+        return
+    if isdir(archive):
+        archive = join(archive, "dr.grätz-os.zip")
+    info("packing " + archive)
+    with ZipFile(archive, "w") as zip:
+        for file in listdir(_Directory.base.path):
+            if isfile(file) and not file.endswith(".zip"):
+                zip.write(file)
+        for file in _Directory.src.get_files():
+            zip.write(_Directory.base.rel_path(file))
+
+
 _CommandLine.evaluate()
 __init_logging()
 _Directory.__static_init__()
-if _CommandLine.make_tool is None:
-    result = _BuildInfo.invokeForAllPlatforms([__compile, __link, __test])
-    _Directory.obj.erase_contents(result)
-    _Directory.bin.erase_contents(result)
-else:
-    _BuildInfo.invokeForAllPlatforms([__make_tool])
-if _CommandLine.create_documentation:
-    __doc()
+__check_prerequisites()
 __download_specifications()
+result = _BuildInfo.invokeForAllPlatforms([__compile, __link, __test])
+_Directory.obj.erase_contents(result)
+_Directory.bin.erase_contents(result)
+__doc()
+__pack_sources()
